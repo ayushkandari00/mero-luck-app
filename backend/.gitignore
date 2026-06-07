@@ -1,0 +1,21 @@
+# Dependency directory
+node_modules/
+
+# Production build artifacts
+dist/
+
+# Local environment files containing secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.staging.local
+
+# SQLite local databases
+prisma/dev.db
+prisma/dev.db-journal
+
+# User upload directories (keep directory structure but ignore files)
+uploads/*
+!uploads/.gitkeep
