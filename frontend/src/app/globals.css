@@ -1,0 +1,157 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8faf8;
+  --foreground: #0b0f0c;
+  
+  --primary-green: #0b6b3a;
+  --secondary-green: #0e8a47;
+  --accent-gold: #d4af37;
+  --premium-gold: #f5d06f;
+  --luxury-dark: #0b0f0c;
+  --gold-gradient: linear-gradient(135deg, #f5d06f 0%, #d4af37 50%, #aa7c11 100%);
+  --gold-metallic: linear-gradient(90deg, #aa7c11 0%, #f5d06f 25%, #d4af37 50%, #f5d06f 75%, #aa7c11 100%);
+  --emerald-gradient: linear-gradient(135deg, #0b6b3a 0%, #0e8a47 100%);
+  --dark-emerald-gradient: linear-gradient(135deg, #0b0f0c 0%, #0b6b3a 100%);
+}
+
+@theme inline {
+  --color-primary-green: var(--primary-green);
+  --color-secondary-green: var(--secondary-green);
+  --color-accent-gold: var(--accent-gold);
+  --color-premium-gold: var(--premium-gold);
+  --color-luxury-dark: var(--luxury-dark);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Glassmorphism Classes */
+.glass {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.glass-dark {
+  background: rgba(11, 15, 12, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(212, 175, 55, 0.15);
+}
+
+/* Metallic gold texts & borders */
+.text-gold-gradient {
+  background: var(--gold-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.bg-gold-gradient {
+  background: var(--gold-gradient);
+}
+
+.bg-gold-metallic {
+  background: var(--gold-metallic);
+}
+
+.border-gold {
+  border-color: var(--accent-gold);
+}
+
+.border-gold-glow {
+  border-color: rgba(212, 175, 55, 0.4);
+  box-shadow: 0 0 15px rgba(212, 175, 55, 0.2);
+}
+
+.bg-emerald-gradient {
+  background: var(--emerald-gradient);
+}
+
+.bg-dark-emerald {
+  background: var(--dark-emerald-gradient);
+}
+
+/* Animations */
+@keyframes spin-y {
+  0% {
+    transform: rotateY(0deg);
+  }
+  100% {
+    transform: rotateY(360deg);
+  }
+}
+
+.animate-spin-y {
+  animation: spin-y 8s linear infinite;
+  transform-style: preserve-3d;
+}
+
+/* Sparkle Floating keyframes */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(10deg);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Coin shine effect on hover */
+.coin-container {
+  perspective: 1000px;
+}
+
+.shine-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.shine-effect::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    to bottom right,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: rotate(30deg);
+  transition: transform 0.8s ease;
+}
+
+.shine-effect:hover::after {
+  transform: translate(100%, 100%) rotate(30deg);
+}
+
+/* Premium custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f8faf8;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #0b6b3a;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #0e8a47;
+}
