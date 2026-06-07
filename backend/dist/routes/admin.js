@@ -1,0 +1,335 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auth_1 = require("../middleware/auth");
+const db_1 = __importDefault(require("../db"));
+const router = (0, express_1.Router)();
+// Helper: Generate a unique 6-digit number not already registered
+const generateUniqueLuckyNumber = async () => {
+    let unique = false;
+    let numStr = '';
+    while (!unique) {
+        const num = Math.floor(100000 + Math.random() * 900000);
+        numStr = num.toString();
+        const existing = await db_1.default.luckyNumber.findUnique({ where: { number: numStr } });
+        if (!existing) {
+            unique = true;
+        }
+    }
+    return numStr;
+};
+// Helper: Generate serial number for physical coins
+const generateSerialNumber = () => {
+    return 'SN-' + Math.random().toString(36).substring(2, 8).toUpperCase() + '-' + Math.floor(1000 + Math.random() * 9000);
+};
+// Admin Dashboard stats
+router.get('/dashboard-stats', auth_1.authenticateToken, auth_1.requireAdmin, async (req, res) => {
+    try {
+        const totalUsers = await db_1.default.user.count();
+        const pendingPaymentsCount = await db_1.default.transaction.count({ where: { status: 'PENDING', paymentProofUrl: { not: null } } });
+        // Revenue calculations
+        const approvedTransactions = await db_1.default.transaction.findMany({ where: { status: 'APPROVED' } });
+        const totalRevenue = approvedTransactions.reduce((acc, t) => acc + t.amount, 0);
+        const activeDraw = await db_1.default.draw.findFirst({ where: { status: 'ACTIVE' } });
+        const totalPrizePool = activeDraw ? activeDraw.prizePool : 0;
+        const coinsSold = await db_1.default.physicalCoin.count();
+        const tokensSold = await db_1.default.digitalToken.count();
+        const pendingKycCount = await db_1.default.profile.count({ where: { kycStatus: 'PENDING' } });
+        return res.json({
+            totalUsers,
+            pendingPayments: pendingPaymentsCount,
+            totalRevenue,
+            prizePool: totalPrizePool,
+            coinsSold,
+            tokensSold,
+            pendingKyc: pendingKycCount,
+        });
+    }
+    catch (error) {
+        return res.status(500).json({ message: 'Error fetching admin stats', error: error.message });
+    }
+});
+// View all transactions (User purchases)
+router.get('/transactions', auth_1.authenticateToken, auth_1.requireAdmin, async (req, res) => {
+    try {
+        const transactions = await db_1.default.transaction.findMany({
+            include: {
+                user: {
+                    select: {
+                        email: true,
+                        phoneNumber: true,
+                        profile: {
+                            select: { firstName: true, lastName: true },
+                        },
+                    },
+                },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+        return res.json(transactions);
+    }
+    catch (error) {
+        return res.status(500).json({ message: 'Error retrieving transactions', error: error.message });
+    }
+});
+// Approve Transaction Payment Proof -> Assign Token or Coin
+router.post('/approve-payment/:id', auth_1.authenticateToken, auth_1.requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const transaction = await db_1.default.transaction.findUnique({ where: { id } });
+        if (!transaction) {
+            return res.status(404).json({ message: 'Transaction not found' });
+        }
+        if (transaction.status === 'APPROVED') {
+            return res.status(400).json({ message: 'Payment already approved' });
+        }
+        const activeDraw = await db_1.default.draw.findFirst({ where: { status: 'ACTIVE' } });
+        if (!activeDraw) {
+            return res.status(400).json({ message: 'No active draw found. Create a draw first.' });
+        }
+        // Run in Prisma Transaction
+        const result = await db_1.default.$transaction(async (tx) => {
+            // 1. Update transaction status
+            const updatedTx = await tx.transaction.update({
+                where: { id },
+                data: { status: 'APPROVED' },
+            });
+            // 2. Generate unique lucky number
+            const numStr = await generateUniqueLuckyNumber();
+            const luckyNumber = await tx.luckyNumber.create({
+                data: {
+                    number: numStr,
+                    userId: transaction.userId,
+                },
+            });
+            // 3. Assign Token or Coin
+            if (transaction.type === 'TOKEN_PURCHASE') {
+                await tx.digitalToken.create({
+                    data: {
+                        userId: transaction.userId,
+                        luckyNumberId: luckyNumber.id,
+                        status: 'ACTIVE',
+                    },
+                });
+            }
+            else {
+                const serialNumber = generateSerialNumber();
+                await tx.physicalCoin.create({
+                    data: {
+                        userId: transaction.userId,
+                        luckyNumberId: luckyNumber.id,
+                        serialNumber,
+                        shippingStatus: 'PROCESSING',
+                        status: 'APPROVED',
+                    },
+                });
+            }
+            // 4. Register active draw entry
+            await tx.entry.create({
+                data: {
+                    drawId: activeDraw.id,
+                    userId: transaction.userId,
+                    luckyNumberId: luckyNumber.id,
+                    status: 'ACTIVE',
+                },
+            });
+            // 5. Notify the user
+            await tx.notification.create({
+                data: {
+                    userId: transaction.userId,
+                    message: `Your payment of ₹${transaction.amount} has been approved! Lucky Number ${numStr} is now assigned to you.`,
+                },
+            });
+            return { numStr };
+        });
+        return res.json({
+            message: `Payment approved. Assigned Lucky Number: ${result.numStr}`,
+        });
+    }
+    catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Failed to approve payment', error: error.message });
+    }
+});
+// Reject payment
+router.post('/reject-payment/:id', auth_1.authenticateToken, auth_1.requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const tx = await db_1.default.transaction.update({
+            where: { id },
+            data: { status: 'REJECTED' },
+        });
+        await db_1.default.notification.create({
+            data: {
+                userId: tx.userId,
+                message: `Your payment of ₹${tx.amount} has been rejected. Please review payment proof or contact support.`,
+            },
+        });
+        return res.json({ message: 'Payment proof rejected.' });
+    }
+    catch (error) {
+        return res.status(500).json({ message: 'Failed to reject payment', error: error.message });
+    }
+});
+// Get all users
+router.get('/users', auth_1.authenticateToken, auth_1.requireAdmin, async (req, res) => {
+    try {
+        const users = await db_1.default.user.findMany({
+            include: {
+                profile: true,
+                address: true,
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+        return res.json(users);
+    }
+    catch (error) {
+        return res.status(500).json({ message: 'Error retrieving users', error: error.message });
+    }
+});
+// Update User KYC Status
+router.post('/users/:id/kyc', auth_1.authenticateToken, auth_1.requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body; // APPROVED, REJECTED
+    try {
+        await db_1.default.profile.update({
+            where: { userId: id },
+            data: { kycStatus: status },
+        });
+        await db_1.default.notification.create({
+            data: {
+                userId: id,
+                message: `Your KYC verification request has been ${status === 'APPROVED' ? 'Approved! You can now participate fully.' : 'Rejected. Please re-upload documents.'}`,
+            },
+        });
+        return res.json({ message: `KYC updated to ${status}` });
+    }
+    catch (error) {
+        return res.status(500).json({ message: 'Error updating KYC', error: error.message });
+    }
+});
+// Draw Management: Create Draw
+router.post('/draws', auth_1.authenticateToken, auth_1.requireAdmin, async (req, res) => {
+    const { title, drawDate, prizePool, grandPrize, secondPrize, thirdPrize, bonusRewards } = req.body;
+    try {
+        const draw = await db_1.default.draw.create({
+            data: {
+                title,
+                drawDate: new Date(drawDate),
+                prizePool: Number(prizePool),
+                grandPrize,
+                secondPrize,
+                thirdPrize,
+                bonusRewards,
+                status: 'ACTIVE',
+            },
+        });
+        return res.status(201).json({ message: 'Draw created successfully', draw });
+    }
+    catch (error) {
+        return res.status(500).json({ message: 'Failed to create draw', error: error.message });
+    }
+});
+// Select Winner for a Draw (Simulated seed random check)
+router.post('/draws/:id/pick-winners', auth_1.authenticateToken, auth_1.requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const draw = await db_1.default.draw.findUnique({
+            where: { id },
+            include: { entries: true },
+        });
+        if (!draw) {
+            return res.status(404).json({ message: 'Draw not found' });
+        }
+        if (draw.status === 'COMPLETED') {
+            return res.status(400).json({ message: 'Winners have already been picked for this draw.' });
+        }
+        if (draw.entries.length === 0) {
+            return res.status(400).json({ message: 'No entries registered for this draw.' });
+        }
+        // Standard draw close and picking
+        // In a production app, we would perform public block hash lookup
+        // Shuffling entries
+        const entries = [...draw.entries];
+        const shuffled = entries.sort(() => Math.random() - 0.5);
+        const grandWinnerEntry = shuffled[0];
+        const secondWinnerEntry = shuffled[1] || shuffled[0];
+        const thirdWinnerEntry = shuffled[2] || shuffled[0];
+        const results = await db_1.default.$transaction(async (tx) => {
+            // Update draw status
+            await tx.draw.update({
+                where: { id },
+                data: { status: 'COMPLETED' },
+            });
+            // Update entries status
+            await tx.entry.updateMany({
+                where: { drawId: id },
+                data: { status: 'LOST' },
+            });
+            // Create winner models
+            const w1 = await tx.winner.create({
+                data: {
+                    drawId: id,
+                    userId: grandWinnerEntry.userId,
+                    prizeCategory: 'GRAND',
+                    prizeAmount: draw.prizePool * 0.6, // 60% pool
+                    verified: true,
+                },
+            });
+            await tx.entry.update({
+                where: { id: grandWinnerEntry.id },
+                data: { status: 'WINNER' },
+            });
+            let w2, w3;
+            if (shuffled[1]) {
+                w2 = await tx.winner.create({
+                    data: {
+                        drawId: id,
+                        userId: secondWinnerEntry.userId,
+                        prizeCategory: 'SECOND',
+                        prizeAmount: draw.prizePool * 0.25, // 25% pool
+                        verified: true,
+                    },
+                });
+                await tx.entry.update({
+                    where: { id: secondWinnerEntry.id },
+                    data: { status: 'WINNER' },
+                });
+            }
+            if (shuffled[2]) {
+                w3 = await tx.winner.create({
+                    data: {
+                        drawId: id,
+                        userId: thirdWinnerEntry.userId,
+                        prizeCategory: 'THIRD',
+                        prizeAmount: draw.prizePool * 0.15, // 15% pool
+                        verified: true,
+                    },
+                });
+                await tx.entry.update({
+                    where: { id: thirdWinnerEntry.id },
+                    data: { status: 'WINNER' },
+                });
+            }
+            // Notify the grand winner
+            await tx.notification.create({
+                data: {
+                    userId: grandWinnerEntry.userId,
+                    message: `🎉 JACKPOT! You won the GRAND PRIZE in "${draw.title}"! Claim your ₹${draw.prizePool * 0.6} now!`,
+                },
+            });
+            return { w1, w2, w3 };
+        });
+        return res.json({
+            message: 'Draw completed and winners announced!',
+            winners: results,
+        });
+    }
+    catch (error) {
+        return res.status(500).json({ message: 'Failed to pick winners', error: error.message });
+    }
+});
+exports.default = router;

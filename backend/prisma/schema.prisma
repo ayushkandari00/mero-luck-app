@@ -1,0 +1,172 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  passwordHash  String
+  phoneNumber   String?        @unique
+  role          String         @default("USER") // USER, ADMIN
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  profile       Profile?
+  address       Address?
+  coins         PhysicalCoin[]
+  tokens        DigitalToken[]
+  luckyNumbers  LuckyNumber[]
+  entries       Entry[]
+  transactions  Transaction[]
+  sentReferrals   Referral[]   @relation("Referrer")
+  rcvdReferrals   Referral[]   @relation("Referee")
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  winners       Winner[]
+}
+
+model Profile {
+  id                  String  @id @default(uuid())
+  userId              String  @unique
+  user                User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName           String?
+  lastName            String?
+  avatarUrl           String?
+  kycStatus           String  @default("PENDING") // PENDING, APPROVED, REJECTED, NONE
+  welcomeBonusClaimed Boolean @default(false)
+  referralCode        String  @unique
+}
+
+model Address {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  street     String
+  city       String
+  state      String
+  postalCode String
+  country    String
+}
+
+model Draw {
+  id            String   @id @default(uuid())
+  title         String
+  drawDate      DateTime
+  prizePool     Float
+  status        String   @default("ACTIVE") // ACTIVE, CLOSED, COMPLETED
+  grandPrize    String
+  secondPrize   String
+  thirdPrize    String
+  bonusRewards  String?
+  createdAt     DateTime @default(now())
+  entries       Entry[]
+  winners       Winner[]
+}
+
+model LuckyNumber {
+  id          String        @id @default(uuid())
+  number      String        @unique // 6-digit engraved number
+  userId      String?
+  user        User?         @relation(fields: [userId], references: [id])
+  token       DigitalToken?
+  coin        PhysicalCoin?
+  entries     Entry[]
+  createdAt   DateTime      @default(now())
+}
+
+model DigitalToken {
+  id            String      @id @default(uuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+  luckyNumberId String      @unique
+  luckyNumber   LuckyNumber @relation(fields: [luckyNumberId], references: [id])
+  purchaseDate  DateTime    @default(now())
+  status        String      @default("PENDING") // PENDING, ACTIVE, EXPIRED
+}
+
+model PhysicalCoin {
+  id             String      @id @default(uuid())
+  userId         String
+  user           User        @relation(fields: [userId], references: [id])
+  luckyNumberId  String      @unique
+  luckyNumber    LuckyNumber @relation(fields: [luckyNumberId], references: [id])
+  serialNumber   String      @unique
+  shippingStatus String      @default("PROCESSING") // PROCESSING, SHIPPED, DELIVERED
+  status         String      @default("PENDING") // PENDING, APPROVED, REJECTED
+  purchaseDate   DateTime    @default(now())
+}
+
+model Entry {
+  id            String      @id @default(uuid())
+  drawId        String
+  draw          Draw        @relation(fields: [drawId], references: [id])
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+  luckyNumberId String
+  luckyNumber   LuckyNumber @relation(fields: [luckyNumberId], references: [id])
+  status        String      @default("ACTIVE") // ACTIVE, WINNER, LOST
+  createdAt     DateTime    @default(now())
+}
+
+model Winner {
+  id            String   @id @default(uuid())
+  drawId        String
+  draw          Draw     @relation(fields: [drawId], references: [id])
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  prizeCategory String   @default("GRAND") // GRAND, SECOND, THIRD, BONUS
+  prizeAmount   Float
+  verified      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+}
+
+model Transaction {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  type            String   // TOKEN_PURCHASE, COIN_PURCHASE
+  amount          Float
+  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  paymentProofUrl String?
+  orderId         String   @unique
+  createdAt       DateTime @default(now())
+}
+
+model Referral {
+  id          String   @id @default(uuid())
+  referrerId  String
+  referrer    User     @relation("Referrer", fields: [referrerId], references: [id])
+  refereeId   String
+  referee     User     @relation("Referee", fields: [refereeId], references: [id])
+  bonusStatus String   @default("PENDING") // PENDING, GRANTED
+  createdAt   DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Admin {
+  id           String @id @default(uuid())
+  username     String @unique
+  passwordHash String
+  role         String @default("SUPERADMIN")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
