@@ -1,6 +1,6 @@
 import { useAuthStore } from '../store/authStore';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 export async function apiFetch(endpoint: string, options: RequestInit = {}) {
   const token = typeof window !== 'undefined' ? localStorage.getItem('mero_token') : null;
