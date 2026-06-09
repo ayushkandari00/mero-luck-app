@@ -9,6 +9,10 @@ export interface AuthRequest extends Request {
     email: string;
     role: string;
   };
+  headers: Request['headers'];
+  body: any;
+  params: any;
+  file?: Express.Multer.File;
 }
 
 export const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -19,7 +23,7 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
     return res.status(401).json({ message: 'Authentication token required' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
     if (err) {
       return res.status(403).json({ message: 'Invalid or expired token' });
     }
