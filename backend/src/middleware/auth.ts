@@ -9,10 +9,10 @@ export interface AuthRequest extends Request {
     email: string;
     role: string;
   };
-  headers: Request['headers'];
+  headers: any;
   body: any;
   params: any;
-  file?: Express.Multer.File;
+  file?: any;
 }
 
 export const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction) => {
