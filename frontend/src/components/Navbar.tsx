@@ -8,26 +8,28 @@ import { Bell, User, LogOut, ShieldAlert, Award } from 'lucide-react';
 import { apiFetch } from '../utils/api';
 
 const LogoIcon = () => (
-  <svg viewBox="0 0 100 100" className="w-9 h-9 drop-shadow-[0_2px_8px_rgba(11,107,58,0.45)] group-hover:scale-105 transition-transform duration-300">
+  <svg suppressHydrationWarning viewBox="0 0 100 100" className="w-9 h-9 drop-shadow-[0_2px_8px_rgba(11,107,58,0.45)] group-hover:scale-105 transition-transform duration-300">
     {/* Outer Gold ring */}
-    <circle cx="50" cy="50" r="46" fill="none" stroke="url(#goldGradient)" strokeWidth="3.5" />
-    <circle cx="50" cy="50" r="41" fill="none" stroke="url(#goldGradient)" strokeWidth="1" strokeDasharray="3 2" />
+    <circle suppressHydrationWarning cx="50" cy="50" r="46" fill="none" stroke="url(#goldGradient)" strokeWidth="3.5" />
+    <circle suppressHydrationWarning cx="50" cy="50" r="41" fill="none" stroke="url(#goldGradient)" strokeWidth="1" strokeDasharray="3 2" />
     {/* Inner Green radial background */}
-    <circle cx="50" cy="50" r="38" fill="url(#emeraldRadial)" />
+    <circle suppressHydrationWarning cx="50" cy="50" r="38" fill="url(#emeraldRadial)" />
     
     {/* Four leaf clover SVG */}
     <path 
+      suppressHydrationWarning
       d="M50 50 C44 33, 28 33, 37 50 C28 67, 44 67, 50 50 C56 67, 72 67, 63 50 C72 33, 56 33, 50 50 Z" 
       fill="url(#goldGradient)" 
       stroke="#aa7c11" 
       strokeWidth="1"
     />
     <path 
+      suppressHydrationWarning
       d="M50 48 L50 25 C40 25, 40 40, 50 48 Z M50 52 L50 75 C60 75, 60 60, 50 52 Z M48 50 L25 50 C25 60, 40 60, 48 50 Z M52 50 L75 50 C75 40, 60 40, 52 50 Z" 
       fill="url(#cloverGreen)"
     />
     {/* Center sparkling dot */}
-    <circle cx="50" cy="50" r="3" fill="#fff" />
+    <circle suppressHydrationWarning cx="50" cy="50" r="3" fill="#fff" />
     
     <defs>
       <radialGradient id="emeraldRadial" cx="50%" cy="50%" r="50%">
@@ -52,6 +54,11 @@ export default function Navbar() {
   const { user, isAuthenticated, logout, setLoginModal } = useAuthStore();
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -93,12 +100,12 @@ export default function Navbar() {
           <Link href="/draws" className={`text-xs font-bold uppercase tracking-wider transition-colors ${pathname === '/draws' ? 'text-[#f5d06f]' : 'text-zinc-300 hover:text-white'}`}>
             Draws
           </Link>
-          {isAuthenticated && (
+          {mounted && isAuthenticated && (
             <Link href="/dashboard" className={`text-xs font-bold uppercase tracking-wider transition-colors ${pathname.startsWith('/dashboard') ? 'text-[#f5d06f]' : 'text-zinc-300 hover:text-white'}`}>
               Dashboard
             </Link>
           )}
-          {isAuthenticated && user?.role === 'ADMIN' && (
+          {mounted && isAuthenticated && user?.role === 'ADMIN' && (
             <Link href="/admin" className={`text-xs font-bold uppercase tracking-wider text-red-400 border border-red-500/30 px-2 py-0.5 rounded flex items-center space-x-1 hover:bg-red-500/10 transition-colors`}>
               <ShieldAlert className="w-3.5 h-3.5" />
               <span>Admin Desk</span>
@@ -108,7 +115,10 @@ export default function Navbar() {
 
         {/* Account controls */}
         <div className="flex items-center space-x-4">
-          {isAuthenticated ? (
+          {!mounted ? (
+            // Placeholder during SSR / before hydration — matches server output
+            <div className="w-20 h-8" />
+          ) : isAuthenticated ? (
             <div className="relative">
               <div className="flex items-center space-x-3">
                 

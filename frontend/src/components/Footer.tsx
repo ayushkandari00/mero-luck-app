@@ -4,26 +4,28 @@ import React from 'react';
 import Link from 'next/link';
 
 const LogoIcon = () => (
-  <svg viewBox="0 0 100 100" className="w-8 h-8 drop-shadow-[0_2px_6px_rgba(11,107,58,0.4)]">
+  <svg suppressHydrationWarning viewBox="0 0 100 100" className="w-8 h-8 drop-shadow-[0_2px_6px_rgba(11,107,58,0.4)]">
     {/* Outer Gold ring */}
-    <circle cx="50" cy="50" r="46" fill="none" stroke="url(#goldGradientFooter)" strokeWidth="3.5" />
-    <circle cx="50" cy="50" r="41" fill="none" stroke="url(#goldGradientFooter)" strokeWidth="1" strokeDasharray="3 2" />
+    <circle suppressHydrationWarning cx="50" cy="50" r="46" fill="none" stroke="url(#goldGradientFooter)" strokeWidth="3.5" />
+    <circle suppressHydrationWarning cx="50" cy="50" r="41" fill="none" stroke="url(#goldGradientFooter)" strokeWidth="1" strokeDasharray="3 2" />
     {/* Inner Green radial background */}
-    <circle cx="50" cy="50" r="38" fill="url(#emeraldRadialFooter)" />
+    <circle suppressHydrationWarning cx="50" cy="50" r="38" fill="url(#emeraldRadialFooter)" />
     
     {/* Four leaf clover SVG */}
     <path 
+      suppressHydrationWarning
       d="M50 50 C44 33, 28 33, 37 50 C28 67, 44 67, 50 50 C56 67, 72 67, 63 50 C72 33, 56 33, 50 50 Z" 
       fill="url(#goldGradientFooter)" 
       stroke="#aa7c11" 
       strokeWidth="1"
     />
     <path 
+      suppressHydrationWarning
       d="M50 48 L50 25 C40 25, 40 40, 50 48 Z M50 52 L50 75 C60 75, 60 60, 50 52 Z M48 50 L25 50 C25 60, 40 60, 48 50 Z M52 50 L75 50 C75 40, 60 40, 52 50 Z" 
       fill="url(#cloverGreenFooter)"
     />
     {/* Center sparkling dot */}
-    <circle cx="50" cy="50" r="3" fill="#fff" />
+    <circle suppressHydrationWarning cx="50" cy="50" r="3" fill="#fff" />
     
     <defs>
       <radialGradient id="emeraldRadialFooter" cx="50%" cy="50%" r="50%">

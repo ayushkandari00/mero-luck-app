@@ -123,7 +123,7 @@ router.post('/approve-payment/:id', authenticateToken, requireAdmin, async (req:
             status: 'ACTIVE',
           },
         });
-      } else {
+      } else if (transaction.type === 'COIN_PURCHASE') {
         const serialNumber = generateSerialNumber();
         await tx.physicalCoin.create({
           data: {
@@ -134,6 +134,16 @@ router.post('/approve-payment/:id', authenticateToken, requireAdmin, async (req:
             status: 'APPROVED',
           },
         });
+      } else if (transaction.type === 'NUMBERED_COIN_PURCHASE') {
+        const numberedCoin = await tx.numberedCoin.findFirst({
+          where: { transactionId: transaction.id }
+        });
+        if (numberedCoin) {
+          await tx.numberedCoin.update({
+            where: { id: numberedCoin.id },
+            data: { status: 'SOLD', purchaseDate: new Date() }
+          });
+        }
       }
 
       // 4. Register active draw entry
@@ -174,6 +184,18 @@ router.post('/reject-payment/:id', authenticateToken, requireAdmin, async (req: 
       where: { id },
       data: { status: 'REJECTED' },
     });
+
+    if (tx.type === 'NUMBERED_COIN_PURCHASE') {
+      const numberedCoin = await prisma.numberedCoin.findFirst({
+        where: { transactionId: tx.id }
+      });
+      if (numberedCoin) {
+        await prisma.numberedCoin.update({
+          where: { id: numberedCoin.id },
+          data: { status: 'AVAILABLE', userId: null, transactionId: null }
+        });
+      }
+    }
 
     await prisma.notification.create({
       data: {

@@ -282,7 +282,7 @@ export default function Home() {
 
           <div className="space-y-1">
             <Calendar className="w-6 h-6 text-[#f5d06f] mx-auto mb-2" />
-            <div className="text-xs sm:text-sm font-bold font-serif text-white truncate max-w-full">
+            <div suppressHydrationWarning className="text-xs sm:text-sm font-bold font-serif text-white truncate max-w-full">
               {new Date(stats.drawDate).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
             </div>
             <p className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider mt-1">Official Draw Date</p>

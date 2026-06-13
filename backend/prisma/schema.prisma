@@ -1,6 +1,6 @@
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -22,11 +22,12 @@ model User {
   luckyNumbers  LuckyNumber[]
   entries       Entry[]
   transactions  Transaction[]
-  sentReferrals   Referral[]   @relation("Referrer")
-  rcvdReferrals   Referral[]   @relation("Referee")
+  sentReferrals Referral[]     @relation("Referrer")
+  rcvdReferrals Referral[]     @relation("Referee")
   notifications Notification[]
   auditLogs     AuditLog[]
   winners       Winner[]
+  numberedCoins NumberedCoin[]
 }
 
 model Profile {
@@ -42,9 +43,9 @@ model Profile {
 }
 
 model Address {
-  id         String   @id @default(uuid())
-  userId     String   @unique
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String @id @default(uuid())
+  userId     String @unique
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   street     String
   city       String
   state      String
@@ -53,29 +54,29 @@ model Address {
 }
 
 model Draw {
-  id            String   @id @default(uuid())
-  title         String
-  drawDate      DateTime
-  prizePool     Float
-  status        String   @default("ACTIVE") // ACTIVE, CLOSED, COMPLETED
-  grandPrize    String
-  secondPrize   String
-  thirdPrize    String
-  bonusRewards  String?
-  createdAt     DateTime @default(now())
-  entries       Entry[]
-  winners       Winner[]
+  id           String   @id @default(uuid())
+  title        String
+  drawDate     DateTime
+  prizePool    Float
+  status       String   @default("ACTIVE") // ACTIVE, CLOSED, COMPLETED
+  grandPrize   String
+  secondPrize  String
+  thirdPrize   String
+  bonusRewards String?
+  createdAt    DateTime @default(now())
+  entries      Entry[]
+  winners      Winner[]
 }
 
 model LuckyNumber {
-  id          String        @id @default(uuid())
-  number      String        @unique // 6-digit engraved number
-  userId      String?
-  user        User?         @relation(fields: [userId], references: [id])
-  token       DigitalToken?
-  coin        PhysicalCoin?
-  entries     Entry[]
-  createdAt   DateTime      @default(now())
+  id        String        @id @default(uuid())
+  number    String        @unique // 6-digit engraved number
+  userId    String?
+  user      User?         @relation(fields: [userId], references: [id])
+  token     DigitalToken?
+  coin      PhysicalCoin?
+  entries   Entry[]
+  createdAt DateTime      @default(now())
 }
 
 model DigitalToken {
@@ -125,15 +126,16 @@ model Winner {
 }
 
 model Transaction {
-  id              String   @id @default(uuid())
+  id              String        @id @default(uuid())
   userId          String
-  user            User     @relation(fields: [userId], references: [id])
-  type            String   // TOKEN_PURCHASE, COIN_PURCHASE
+  user            User          @relation(fields: [userId], references: [id])
+  type            String // TOKEN_PURCHASE, COIN_PURCHASE
   amount          Float
-  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  status          String        @default("PENDING") // PENDING, APPROVED, REJECTED
   paymentProofUrl String?
-  orderId         String   @unique
-  createdAt       DateTime @default(now())
+  orderId         String        @unique
+  createdAt       DateTime      @default(now())
+  numberedCoin    NumberedCoin?
 }
 
 model Referral {
@@ -169,4 +171,15 @@ model AuditLog {
   action    String
   ipAddress String?
   createdAt DateTime @default(now())
+}
+
+model NumberedCoin {
+  id            String       @id @default(uuid())
+  coinNumber    String       @unique // "000001" to "100000"
+  status        String       @default("AVAILABLE") // AVAILABLE, RESERVED, SOLD
+  userId        String?
+  user          User?        @relation(fields: [userId], references: [id])
+  transactionId String?      @unique
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+  purchaseDate  DateTime?
 }

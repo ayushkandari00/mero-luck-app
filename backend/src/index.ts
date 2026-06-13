@@ -13,6 +13,7 @@ import userRoutes from './routes/users';
 import purchaseRoutes from './routes/purchases';
 import drawRoutes from './routes/draws';
 import adminRoutes from './routes/admin';
+import numberedCoinRoutes from './routes/numbered-coins';
 
 const app = express();
 const server = http.createServer(app);
@@ -41,6 +42,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/draws', drawRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/numbered-coins', numberedCoinRoutes);
 
 // Simple health check
 app.get('/health', (req, res) => {
