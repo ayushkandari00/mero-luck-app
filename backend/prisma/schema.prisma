@@ -133,7 +133,7 @@ model Transaction {
   amount          Float
   status          String        @default("PENDING") // PENDING, APPROVED, REJECTED
   paymentProofUrl String?
-  paymentMethod   String?       // esewa, khalti, phonepay
+  paymentMethod   String?       // esewa, khalti, phonepay, fonepay
   orderId         String        @unique
   createdAt       DateTime      @default(now())
   numberedCoin    NumberedCoin?

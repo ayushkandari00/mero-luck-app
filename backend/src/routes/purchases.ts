@@ -46,7 +46,7 @@ const upload = multer({
 router.post('/buy-token', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id!;
-    const { paymentMethod } = req.body; // esewa | khalti | phonepay
+    const { paymentMethod } = req.body; // esewa | khalti | phonepay | fonepay
     // Standard cost: Digital token = ₹250
     const price = 250; 
     const orderId = 'ORD-TKN-' + Math.random().toString(36).substring(2, 10).toUpperCase();
@@ -89,7 +89,7 @@ router.post('/buy-coin', authenticateToken, async (req: AuthRequest, res: Respon
     const orderId = 'ORD-COIN-' + Math.random().toString(36).substring(2, 10).toUpperCase();
 
     // Validate paymentMethod
-    const validMethods = ['esewa', 'khalti', 'phonepay'];
+    const validMethods = ['esewa', 'khalti', 'phonepay', 'fonepay'];
     const safePaymentMethod = validMethods.includes(paymentMethod) ? paymentMethod : null;
 
     const address = await prisma.address.findUnique({ where: { userId } });

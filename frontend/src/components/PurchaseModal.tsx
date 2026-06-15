@@ -6,7 +6,7 @@ import { X, Upload, CheckCircle2, Clipboard, ChevronRight, QrCode } from 'lucide
 import { apiFetch } from '../utils/api';
 import { motion, AnimatePresence } from 'framer-motion';
 
-type PaymentGateway = 'esewa' | 'khalti' | 'phonepay';
+type PaymentGateway = 'esewa' | 'khalti' | 'phonepay' | 'fonepay';
 
 const GATEWAYS: { id: PaymentGateway; label: string; color: string; bg: string; border: string; textColor: string; logo: string; desc: string }[] = [
   {
@@ -39,6 +39,16 @@ const GATEWAYS: { id: PaymentGateway; label: string; color: string; bg: string; 
     logo: '🔵',
     desc: 'India\'s trusted UPI app',
   },
+  {
+    id: 'fonepay',
+    label: 'Fonepay',
+    color: 'from-red-600 to-red-700',
+    bg: 'bg-red-950/30',
+    border: 'border-red-500/40',
+    textColor: 'text-red-400',
+    logo: '🔴',
+    desc: 'Nepal\'s instant bank transfer & QR',
+  },
 ];
 
 // QR code placeholder per gateway - swap with real images when available
@@ -46,6 +56,7 @@ const QR_IMAGES: Record<PaymentGateway, string | null> = {
   esewa: null,   // Replace with actual QR image path e.g. '/qr/esewa.png'
   khalti: null,  // Replace with actual QR image path e.g. '/qr/khalti.png'
   phonepay: null, // Replace with actual QR image path e.g. '/qr/phonepay.png'
+  fonepay: null,
 };
 
 export default function PurchaseModal() {
@@ -349,6 +360,9 @@ export default function PurchaseModal() {
                         {gw.id === 'phonepay' && (
                           <span className="font-black text-white text-xs tracking-tight">Ph</span>
                         )}
+                        {gw.id === 'fonepay' && (
+                          <span className="font-black text-white text-xs tracking-tight">F</span>
+                        )}
                       </div>
 
                       <div className="flex-1 min-w-0">
@@ -411,7 +425,7 @@ export default function PurchaseModal() {
                   <div className={`flex items-center gap-3 px-4 py-2.5 rounded-lg ${activeGateway.bg} border ${activeGateway.border}`}>
                     <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${activeGateway.color} flex items-center justify-center`}>
                       <span className="text-white text-[10px] font-black">
-                        {activeGateway.id === 'esewa' ? 'e' : activeGateway.id === 'khalti' ? 'K' : 'Ph'}
+                        {activeGateway.id === 'esewa' ? 'e' : activeGateway.id === 'khalti' ? 'K' : activeGateway.id === 'phonepay' ? 'Ph' : 'F'}
                       </span>
                     </div>
                     <div>

@@ -87,7 +87,7 @@ router.get('/stats', authenticateToken, async (req: AuthRequest, res: Response) 
 router.post('/purchase', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id!;
-    const { coinNumber, paymentMethod } = req.body; // paymentMethod: esewa | khalti | phonepay
+    const { coinNumber, paymentMethod } = req.body; // paymentMethod: esewa | khalti | phonepay | fonepay
     const price = 1000; // Standard cost: Numbered Coin = ₹1000
 
     if (!coinNumber) {

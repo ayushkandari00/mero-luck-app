@@ -12,7 +12,7 @@ type Coin = {
   user?: { email: string; profile: { firstName: string; lastName: string } };
 };
 
-type PaymentGateway = 'esewa' | 'khalti' | 'phonepay';
+type PaymentGateway = 'esewa' | 'khalti' | 'phonepay' | 'fonepay';
 
 const GATEWAYS: { id: PaymentGateway; label: string; color: string; bg: string; border: string; textColor: string; desc: string }[] = [
   {
@@ -42,6 +42,15 @@ const GATEWAYS: { id: PaymentGateway; label: string; color: string; bg: string; 
     textColor: 'text-blue-400',
     desc: "India's trusted UPI app",
   },
+  {
+    id: 'fonepay',
+    label: 'Fonepay',
+    color: 'from-red-600 to-red-700',
+    bg: 'bg-red-950/30',
+    border: 'border-red-500/40',
+    textColor: 'text-red-400',
+    desc: "Nepal's instant bank transfer & QR",
+  },
 ];
 
 // Replace null with actual image paths when QR codes are provided
@@ -50,6 +59,7 @@ const QR_IMAGES: Record<PaymentGateway, string | null> = {
   esewa: null,
   khalti: null,
   phonepay: null,
+  fonepay: null,
 };
 
 export default function NumberedCoinsMarketplace() {
@@ -359,7 +369,7 @@ export default function NumberedCoinsMarketplace() {
                         >
                           <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gw.color} flex items-center justify-center flex-shrink-0`}>
                             <span className="text-white text-xs font-black">
-                              {gw.id === 'esewa' ? 'e' : gw.id === 'khalti' ? 'K' : 'Ph'}
+                              {gw.id === 'esewa' ? 'e' : gw.id === 'khalti' ? 'K' : gw.id === 'phonepay' ? 'Ph' : 'F'}
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
@@ -420,7 +430,7 @@ export default function NumberedCoinsMarketplace() {
                       <div className={`flex items-center gap-3 px-3 py-2 rounded-lg ${activeGateway.bg} border ${activeGateway.border}`}>
                         <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${activeGateway.color} flex items-center justify-center`}>
                           <span className="text-white text-[10px] font-black">
-                            {activeGateway.id === 'esewa' ? 'e' : activeGateway.id === 'khalti' ? 'K' : 'Ph'}
+                            {activeGateway.id === 'esewa' ? 'e' : activeGateway.id === 'khalti' ? 'K' : activeGateway.id === 'phonepay' ? 'Ph' : 'F'}
                           </span>
                         </div>
                         <p className={`text-xs font-bold ${activeGateway.textColor}`}>{activeGateway.label} Payment Selected</p>
