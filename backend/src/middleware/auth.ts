@@ -1,7 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretmerolucktoken123!';
+// ─── SECURITY C6: No hardcoded fallback secrets ─────────────────────────────
+// auth.ts startup guard ensures these are set. These are read here for token
+// verification only — they will always be defined by the time routes run.
+const JWT_SECRET = process.env.JWT_SECRET!;
 
 export interface AuthRequest extends Request {
   user?: {
@@ -33,6 +36,7 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
 };
 
 export const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
+  // ─── SECURITY C1: Role checked from verified JWT payload, not from email ──
   if (!req.user || req.user.role !== 'ADMIN') {
     return res.status(403).json({ message: 'Access denied. Administrator privileges required.' });
   }

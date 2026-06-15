@@ -46,18 +46,20 @@ router.get('/live-stats', async (req: Request, res: Response) => {
       drawId: activeDraw.id,
       title: activeDraw.title,
       prizePool: activeDraw.prizePool,
-      entriesCount: entriesCount + 1342, // Add baseline to make it look alive & popular as requested (Apple-level luxury)
-      participantsCount: participantsCount + 589, // baseline + current
+      // ─── SECURITY M4: No fake inflation — return real counts ─────────────────
+      entriesCount,
+      participantsCount,
       drawDate: activeDraw.drawDate,
-      tokensSold: tokensCount + 890,
-      coinsSold: coinsCount + 452,
+      tokensSold: tokensCount,
+      coinsSold: coinsCount,
       grandPrize: activeDraw.grandPrize,
       secondPrize: activeDraw.secondPrize,
       thirdPrize: activeDraw.thirdPrize,
       bonusRewards: activeDraw.bonusRewards,
     });
   } catch (error: any) {
-    return res.status(500).json({ message: 'Failed to retrieve live stats', error: error.message });
+    console.error('[Live Stats Error]', error);
+    return res.status(500).json({ message: 'Failed to retrieve live stats.' });
   }
 });
 

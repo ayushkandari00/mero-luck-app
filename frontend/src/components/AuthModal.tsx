@@ -49,12 +49,8 @@ export default function AuthModal() {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
-      // Fetch full profile info for Zustand store
-      const userRes = await fetch('http://localhost:5000/api/users/me', {
-        headers: { 'Authorization': `Bearer ${res.accessToken}` }
-      });
-      const userData = userRes.ok ? await userRes.json() : res.user;
-
+      // ─── SECURITY M3: Use centralized apiFetch instead of hardcoded localhost URL
+      const userData = await apiFetch('/users/me');
       setAuth(userData, res.accessToken, res.refreshToken);
       handleClose();
     } catch (err: any) {
@@ -82,22 +78,18 @@ export default function AuthModal() {
         }),
       });
 
-      // Get profile
-      const userRes = await fetch('http://localhost:5000/api/users/me', {
-        headers: { 'Authorization': `Bearer ${res.accessToken}` }
-      });
-      const userData = userRes.ok ? await userRes.json() : res.user;
-
+      // ─── SECURITY M3: Store token first so apiFetch can attach it on /users/me
+      localStorage.setItem('mero_token', res.accessToken);
+      localStorage.setItem('mero_refresh_token', res.refreshToken);
+      const userData = await apiFetch('/users/me');
       setAuth(userData, res.accessToken, res.refreshToken);
 
-      // Trigger simulated OTP flow immediately on registration to verify phone number
       setMode('otp');
-      // Request OTP
       const otpRes = await apiFetch('/auth/otp/send', {
         method: 'POST',
         body: JSON.stringify({ phoneNumber }),
       });
-      setOtpSentMsg(otpRes.message + ` Code logged to server console.`);
+      setOtpSentMsg(otpRes.message);
     } catch (err: any) {
       setErrorMsg(err.message || 'Registration failed.');
     } finally {
@@ -129,31 +121,9 @@ export default function AuthModal() {
   };
 
   const handleGoogleLoginMock = async () => {
-    setLoading(true);
-    setErrorMsg('');
-
-    try {
-      const res = await apiFetch('/auth/google-login', {
-        method: 'POST',
-        body: JSON.stringify({
-          email: 'ayush.google@gmail.com',
-          name: 'Ayush GoogleUser',
-          googleToken: 'mock-google-token-42',
-        }),
-      });
-
-      const userRes = await fetch('http://localhost:5000/api/users/me', {
-        headers: { 'Authorization': `Bearer ${res.accessToken}` }
-      });
-      const userData = userRes.ok ? await userRes.json() : res.user;
-
-      setAuth(userData, res.accessToken, res.refreshToken);
-      handleClose();
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Google login failed.');
-    } finally {
-      setLoading(false);
-    }
+    // ─── SECURITY C3: Google OAuth mock is disabled — backend returns 503.
+    // This button now informs the user instead of sending fake credentials.
+    setErrorMsg('Google login is not yet available. Please use email/password to sign in.');
   };
 
   return (

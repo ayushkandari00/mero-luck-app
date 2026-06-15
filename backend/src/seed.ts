@@ -20,7 +20,9 @@ async function main() {
   await prisma.user.deleteMany();
 
   // Create Admin
-  const adminPasswordHash = await bcrypt.hash('adminpassword123', 10);
+  // ⚠️  IMPORTANT: Change these passwords immediately after seeding in production!
+  // Use: node -e "const b=require('bcryptjs'); b.hash('YourNewPassword', 12).then(console.log)"
+  const adminPasswordHash = await bcrypt.hash('adminpassword123', 12);
   const adminUser = await prisma.user.create({
     data: {
       email: 'admin@meroluck.com',
@@ -40,7 +42,7 @@ async function main() {
   console.log('Admin user created: admin@meroluck.com / adminpassword123');
 
   // Create Standard User
-  const userPasswordHash = await bcrypt.hash('userpassword123', 10);
+  const userPasswordHash = await bcrypt.hash('userpassword123', 12);
   const normalUser = await prisma.user.create({
     data: {
       email: 'user@meroluck.com',

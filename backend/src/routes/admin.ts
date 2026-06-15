@@ -214,7 +214,13 @@ router.post('/reject-payment/:id', authenticateToken, requireAdmin, async (req: 
 router.get('/users', authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const users = await prisma.user.findMany({
-      include: {
+      // ─── SECURITY M2: Explicitly exclude passwordHash from admin user list ────
+      select: {
+        id: true,
+        email: true,
+        phoneNumber: true,
+        role: true,
+        createdAt: true,
         profile: true,
         address: true,
       },
@@ -222,14 +228,22 @@ router.get('/users', authenticateToken, requireAdmin, async (req: AuthRequest, r
     });
     return res.json(users);
   } catch (error: any) {
-    return res.status(500).json({ message: 'Error retrieving users', error: error.message });
+    console.error('[Admin Users Error]', error);
+    return res.status(500).json({ message: 'Error retrieving users.' });
   }
 });
 
 // Update User KYC Status
 router.post('/users/:id/kyc', authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { status } = req.body; // APPROVED, REJECTED
+  const { status } = req.body;
+
+  // ─── SECURITY H3: Enum validation for KYC status ─────────────────────────
+  const validStatuses = ['APPROVED', 'REJECTED', 'PENDING'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ message: `Invalid KYC status. Must be one of: ${validStatuses.join(', ')}` });
+  }
+
   try {
     await prisma.profile.update({
       where: { userId: id },
@@ -245,7 +259,8 @@ router.post('/users/:id/kyc', authenticateToken, requireAdmin, async (req: AuthR
 
     return res.json({ message: `KYC updated to ${status}` });
   } catch (error: any) {
-    return res.status(500).json({ message: 'Error updating KYC', error: error.message });
+    console.error('[KYC Update Error]', error);
+    return res.status(500).json({ message: 'Error updating KYC status.' });
   }
 });
 

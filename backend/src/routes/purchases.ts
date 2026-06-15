@@ -13,23 +13,40 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Multer Storage Setup
+// ─── SECURITY C4: Strict file type + size validation ─────────────────────────
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf'];
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
+    // Use only the extension we validated — don't trust originalname for the full path
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, uniqueSuffix + ext);
   },
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: MAX_FILE_SIZE },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!ALLOWED_MIME_TYPES.includes(file.mimetype) || !ALLOWED_EXTENSIONS.includes(ext)) {
+      return cb(new Error('Invalid file type. Only JPEG, PNG, GIF, WebP, and PDF files are allowed.'));
+    }
+    cb(null, true);
+  },
+});
 
 // Create Digital Token Purchase Order
 router.post('/buy-token', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id!;
+    const { paymentMethod } = req.body; // esewa | khalti | phonepay
     // Standard cost: Digital token = ₹250
     const price = 250; 
     const orderId = 'ORD-TKN-' + Math.random().toString(36).substring(2, 10).toUpperCase();
@@ -41,6 +58,7 @@ router.post('/buy-token', authenticateToken, async (req: AuthRequest, res: Respo
         amount: price,
         status: 'PENDING',
         orderId,
+        paymentMethod: paymentMethod || null,
       },
     });
 
@@ -64,16 +82,19 @@ router.post('/buy-token', authenticateToken, async (req: AuthRequest, res: Respo
 router.post('/buy-coin', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id!;
-    const { quantity } = req.body;
-    const qty = Number(quantity) || 1;
-    // Standard cost: Physical coin = ₹2500 each
-    const price = 2500 * qty; 
+    const { quantity, paymentMethod } = req.body;
+    // ─── SECURITY H4: Clamp quantity 1-10, never trust client ───────────────
+    const qty = Math.min(10, Math.max(1, Number(quantity) || 1));
+    const price = 2500 * qty;
     const orderId = 'ORD-COIN-' + Math.random().toString(36).substring(2, 10).toUpperCase();
 
-    // Verify address is set up
+    // Validate paymentMethod
+    const validMethods = ['esewa', 'khalti', 'phonepay'];
+    const safePaymentMethod = validMethods.includes(paymentMethod) ? paymentMethod : null;
+
     const address = await prisma.address.findUnique({ where: { userId } });
     if (!address) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'Shipping address required before buying physical coins. Please update your profile shipping address.',
         noAddress: true
       });
@@ -86,6 +107,7 @@ router.post('/buy-coin', authenticateToken, async (req: AuthRequest, res: Respon
         amount: price,
         status: 'PENDING',
         orderId,
+        paymentMethod: safePaymentMethod,
       },
     });
 
@@ -101,18 +123,31 @@ router.post('/buy-coin', authenticateToken, async (req: AuthRequest, res: Respon
       },
     });
   } catch (error: any) {
-    return res.status(500).json({ message: 'Failed to create coin order', error: error.message });
+    console.error('[Buy Coin Error]', error);
+    return res.status(500).json({ message: 'Failed to create coin order. Please try again.' });
   }
 });
 
 // Upload Payment Proof
-router.post('/upload-proof/:orderId', authenticateToken, upload.single('receipt'), async (req: AuthRequest, res: Response) => {
+router.post('/upload-proof/:orderId', authenticateToken, (req, res, next) => {
+  upload.single('receipt')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ message: 'File too large. Maximum size is 5MB.' });
+      }
+      return res.status(400).json({ message: `Upload error: ${err.message}` });
+    } else if (err) {
+      return res.status(400).json({ message: err.message });
+    }
+    next();
+  });
+}, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id!;
     const { orderId } = req.params;
 
     if (!req.file) {
-      return res.status(400).json({ message: 'Payment proof file (image/pdf) is required' });
+      return res.status(400).json({ message: 'Payment proof file is required' });
     }
 
     const transaction = await prisma.transaction.findUnique({ where: { orderId } });
@@ -120,8 +155,14 @@ router.post('/upload-proof/:orderId', authenticateToken, upload.single('receipt'
       return res.status(404).json({ message: 'Order not found' });
     }
 
+    // ─── SECURITY: Verify ownership before accepting upload ────────────────
     if (transaction.userId !== userId) {
-      return res.status(403).json({ message: 'Unauthorized' });
+      return res.status(403).json({ message: 'You are not authorized to upload proof for this order.' });
+    }
+
+    // Don't allow re-uploading after already approved
+    if (transaction.status === 'APPROVED') {
+      return res.status(400).json({ message: 'This order is already approved. No further uploads needed.' });
     }
 
     const relativePath = `/uploads/${req.file.filename}`;
@@ -130,11 +171,10 @@ router.post('/upload-proof/:orderId', authenticateToken, upload.single('receipt'
       where: { orderId },
       data: {
         paymentProofUrl: relativePath,
-        status: 'PENDING', // keep pending until admin reviews
+        status: 'PENDING',
       },
     });
 
-    // Notify user
     await prisma.notification.create({
       data: {
         userId,
@@ -147,7 +187,8 @@ router.post('/upload-proof/:orderId', authenticateToken, upload.single('receipt'
       transaction: updatedTransaction,
     });
   } catch (error: any) {
-    return res.status(500).json({ message: 'Upload failed', error: error.message });
+    console.error('[Upload Proof Error]', error);
+    return res.status(500).json({ message: 'Upload failed. Please try again.' });
   }
 });
 

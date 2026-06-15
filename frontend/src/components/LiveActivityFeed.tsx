@@ -17,8 +17,11 @@ export default function LiveActivityFeed() {
   const [activities, setActivities] = useState<Activity[]>([]);
 
   useEffect(() => {
-    // Standard connection
-    const socket: Socket = io('http://localhost:5000');
+    // Use env variable in production — falls back to localhost in dev
+    const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
+    const socket: Socket = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+    });
 
     socket.on('connect', () => {
       console.log('Realtime feed socket connected');

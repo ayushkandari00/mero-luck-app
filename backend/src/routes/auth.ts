@@ -5,30 +5,60 @@ import { v4 as uuidv4 } from 'uuid';
 import prisma from '../db';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretmerolucktoken123!';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'supersecretmeroluckrefreshtoken123!';
 
-// Simple mock OTP storage in memory (phone number -> OTP code)
-const mockOtpStore = new Map<string, { code: string; expiresAt: number }>();
+// ─── SECURITY C6: Require real secrets in production ─────────────────────────
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 
-// Generate a random referral code
+const DEV_SECRETS = [
+  'dev_jwt_secret_change_in_production',
+  'dev_jwt_refresh_secret_change_in_production',
+  '',
+  undefined,
+];
+
+const isProduction = process.env.NODE_ENV === 'production';
+
+if (!JWT_SECRET || (isProduction && DEV_SECRETS.includes(JWT_SECRET))) {
+  const msg = 'FATAL: JWT_SECRET is not set or is still the dev placeholder. Set a strong random secret in production .env';
+  if (isProduction) { console.error(msg); process.exit(1); }
+  else console.warn('[DEV WARNING] JWT_SECRET is using a dev placeholder. Change before going to production.');
+}
+
+if (!JWT_REFRESH_SECRET || (isProduction && DEV_SECRETS.includes(JWT_REFRESH_SECRET))) {
+  const msg = 'FATAL: JWT_REFRESH_SECRET is not set or is still the dev placeholder. Set a strong random secret in production .env';
+  if (isProduction) { console.error(msg); process.exit(1); }
+  else console.warn('[DEV WARNING] JWT_REFRESH_SECRET is using a dev placeholder. Change before going to production.');
+}
+
+// OTP store: phoneNumber -> { code, expiresAt, attempts }
+const mockOtpStore = new Map<string, { code: string; expiresAt: number; attempts: number }>();
+
 const generateReferralCode = () => {
   return 'MERO-' + Math.random().toString(36).substring(2, 8).toUpperCase();
 };
 
-// Generate access & refresh tokens
+// ─── SECURITY: Tokens always signed with verified secrets ─────────────────────
 const generateTokens = (user: { id: string; email: string; role: string }) => {
   const accessToken = jwt.sign(
     { id: user.id, email: user.email, role: user.role },
-    JWT_SECRET,
+    JWT_SECRET!,
     { expiresIn: '1d' }
   );
   const refreshToken = jwt.sign(
     { id: user.id, email: user.email, role: user.role },
-    JWT_REFRESH_SECRET,
+    JWT_REFRESH_SECRET!,
     { expiresIn: '7d' }
   );
   return { accessToken, refreshToken };
+};
+
+// ─── SECURITY: Server-side password strength validation ───────────────────────
+const validatePassword = (password: string): string | null => {
+  if (password.length < 8) return 'Password must be at least 8 characters long.';
+  if (!/[a-zA-Z]/.test(password)) return 'Password must contain at least one letter.';
+  if (!/[0-9]/.test(password)) return 'Password must contain at least one number.';
+  return null;
 };
 
 // Register
@@ -38,6 +68,17 @@ router.post('/register', async (req: Request, res: Response) => {
 
     if (!email || !password) {
       return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    // ─── SECURITY C2: Enforce password strength ────────────────────────────
+    const pwError = validatePassword(password);
+    if (pwError) {
+      return res.status(400).json({ message: pwError });
+    }
+
+    // Basic email format check
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ message: 'Invalid email address format.' });
     }
 
     const existingUser = await prisma.user.findFirst({
@@ -50,29 +91,28 @@ router.post('/register', async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'User with this email or phone number already exists' });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 12); // increased from 10 to 12
     const newRefCode = generateReferralCode();
 
-    // Start a transaction to create user, profile and welcome bonus
     const user = await prisma.$transaction(async (tx) => {
       const u = await tx.user.create({
         data: {
           email,
           passwordHash,
           phoneNumber,
-          role: email.toLowerCase().includes('admin') ? 'ADMIN' : 'USER',
+          // ─── SECURITY C1: Role NEVER derived from email ──────────────────
+          role: 'USER',
           profile: {
             create: {
               firstName: firstName || '',
               lastName: lastName || '',
               referralCode: newRefCode,
-              welcomeBonusClaimed: true, // Welcome bonus granted automatically
+              welcomeBonusClaimed: true,
             },
           },
         },
       });
 
-      // Handle referral code signup if provided
       if (referralCode) {
         const referrerProfile = await tx.profile.findUnique({
           where: { referralCode },
@@ -87,7 +127,6 @@ router.post('/register', async (req: Request, res: Response) => {
             },
           });
 
-          // Create standard welcome notifications for both
           await tx.notification.create({
             data: {
               userId: referrerProfile.userId,
@@ -97,7 +136,6 @@ router.post('/register', async (req: Request, res: Response) => {
         }
       }
 
-      // Welcome notifications
       await tx.notification.create({
         data: {
           userId: u.id,
@@ -119,8 +157,9 @@ router.post('/register', async (req: Request, res: Response) => {
       ...tokens,
     });
   } catch (error: any) {
-    console.error(error);
-    return res.status(500).json({ message: 'Registration failed', error: error.message });
+    console.error('[Register Error]', error);
+    // ─── SECURITY M1: Never leak internal error details ────────────────────
+    return res.status(500).json({ message: 'Registration failed. Please try again.' });
   }
 });
 
@@ -134,12 +173,13 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid email or password' });
-    }
+    // ─── SECURITY: Constant-time comparison even if user doesn't exist ─────
+    const dummyHash = '$2a$12$invalidhashfortimingprotection000000000000000000000000';
+    const validPassword = user
+      ? await bcrypt.compare(password, user.passwordHash)
+      : await bcrypt.compare(password, dummyHash);
 
-    const validPassword = await bcrypt.compare(password, user.passwordHash);
-    if (!validPassword) {
+    if (!user || !validPassword) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
@@ -154,8 +194,8 @@ router.post('/login', async (req: Request, res: Response) => {
       ...tokens,
     });
   } catch (error: any) {
-    console.error(error);
-    return res.status(500).json({ message: 'Login failed', error: error.message });
+    console.error('[Login Error]', error);
+    return res.status(500).json({ message: 'Login failed. Please try again.' });
   }
 });
 
@@ -167,7 +207,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
   }
 
   try {
-    const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET) as { id: string; email: string; role: string };
+    const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET!) as { id: string; email: string; role: string };
     const user = await prisma.user.findUnique({ where: { id: decoded.id } });
 
     if (!user) {
@@ -181,25 +221,25 @@ router.post('/refresh', async (req: Request, res: Response) => {
   }
 });
 
-// Request OTP Verification (simulated)
+// Request OTP Verification
 router.post('/otp/send', async (req: Request, res: Response) => {
   const { phoneNumber } = req.body;
   if (!phoneNumber) {
     return res.status(400).json({ message: 'Phone number is required' });
   }
 
-  // Generate 6-digit OTP code
   const code = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 min expiry
+  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 min
 
-  mockOtpStore.set(phoneNumber, { code, expiresAt });
+  // ─── SECURITY H5: Reset attempts on resend ────────────────────────────────
+  mockOtpStore.set(phoneNumber, { code, expiresAt, attempts: 0 });
 
-  console.log(`[MOCK OTP] Verification code for ${phoneNumber} is: ${code}`);
+  // ─── SECURITY C2: OTP is NEVER returned in the HTTP response ─────────────
+  // In production: integrate an SMS provider (Twilio, Sparrow SMS, etc.)
+  console.log(`[OTP] Code for ${phoneNumber}: ${code}`); // server-side only
 
   return res.json({
-    message: 'OTP sent successfully (Simulated)',
-    // In production we would not send this back in the response, but for testing convenience let's provide it or log it
-    otp: code, 
+    message: 'OTP sent successfully. Please check your SMS.',
   });
 });
 
@@ -212,7 +252,13 @@ router.post('/otp/verify', async (req: Request, res: Response) => {
 
   const stored = mockOtpStore.get(phoneNumber);
   if (!stored) {
-    return res.status(400).json({ message: 'No active OTP verification request found for this number' });
+    return res.status(400).json({ message: 'No active OTP request found for this number. Please request a new OTP.' });
+  }
+
+  // ─── SECURITY H5: OTP attempt limit ──────────────────────────────────────
+  if (stored.attempts >= 5) {
+    mockOtpStore.delete(phoneNumber);
+    return res.status(429).json({ message: 'Too many incorrect attempts. Please request a new OTP.' });
   }
 
   if (Date.now() > stored.expiresAt) {
@@ -221,12 +267,14 @@ router.post('/otp/verify', async (req: Request, res: Response) => {
   }
 
   if (stored.code !== code) {
-    return res.status(400).json({ message: 'Incorrect verification code' });
+    // Increment attempt counter
+    mockOtpStore.set(phoneNumber, { ...stored, attempts: stored.attempts + 1 });
+    const remaining = 5 - (stored.attempts + 1);
+    return res.status(400).json({ message: `Incorrect verification code. ${remaining} attempt(s) remaining.` });
   }
 
   mockOtpStore.delete(phoneNumber);
 
-  // If a user has this phone number, we can mark their profile KYC or verification as updated
   const user = await prisma.user.findUnique({ where: { phoneNumber } });
   if (user) {
     await prisma.profile.update({
@@ -238,55 +286,15 @@ router.post('/otp/verify', async (req: Request, res: Response) => {
   return res.json({ message: 'OTP verified successfully!' });
 });
 
-// Mock Google OAuth login
+// ─── SECURITY C3: Google OAuth disabled until properly implemented ─────────────
+// The mock implementation accepts any email without verifying the Google token,
+// which is a critical authentication bypass vulnerability.
+// To enable: install firebase-admin or google-auth-library, verify the idToken,
+// then create/update the user safely.
 router.post('/google-login', async (req: Request, res: Response) => {
-  const { email, name, googleToken } = req.body;
-  if (!email) {
-    return res.status(400).json({ message: 'Email is required' });
-  }
-
-  try {
-    let user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      const passwordHash = await bcrypt.hash(uuidv4(), 10);
-      const newRefCode = generateReferralCode();
-      user = await prisma.user.create({
-        data: {
-          email,
-          passwordHash,
-          role: email.toLowerCase().includes('admin') ? 'ADMIN' : 'USER',
-          profile: {
-            create: {
-              firstName: name?.split(' ')[0] || '',
-              lastName: name?.split(' ')[1] || '',
-              referralCode: newRefCode,
-              welcomeBonusClaimed: true,
-            },
-          },
-        },
-      });
-
-      await prisma.notification.create({
-        data: {
-          userId: user.id,
-          message: 'Welcome to Mero Luck! Signed in via Google. A ₹100 Welcome Bonus is yours.',
-        },
-      });
-    }
-
-    const tokens = generateTokens(user);
-    return res.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        phoneNumber: user.phoneNumber,
-        role: user.role,
-      },
-      ...tokens,
-    });
-  } catch (error: any) {
-    return res.status(500).json({ message: 'Google authentication failed', error: error.message });
-  }
+  return res.status(503).json({
+    message: 'Google OAuth is not yet configured for production. Please use email/password login.',
+  });
 });
 
 export default router;

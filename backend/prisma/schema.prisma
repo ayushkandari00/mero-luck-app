@@ -129,10 +129,11 @@ model Transaction {
   id              String        @id @default(uuid())
   userId          String
   user            User          @relation(fields: [userId], references: [id])
-  type            String // TOKEN_PURCHASE, COIN_PURCHASE
+  type            String // TOKEN_PURCHASE, COIN_PURCHASE, NUMBERED_COIN_PURCHASE
   amount          Float
   status          String        @default("PENDING") // PENDING, APPROVED, REJECTED
   paymentProofUrl String?
+  paymentMethod   String?       // esewa, khalti, phonepay
   orderId         String        @unique
   createdAt       DateTime      @default(now())
   numberedCoin    NumberedCoin?

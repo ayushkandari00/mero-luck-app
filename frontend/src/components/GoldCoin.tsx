@@ -35,8 +35,11 @@ export default function GoldCoin({
           ${autoRotate ? 'animate-spin-y' : ''}
           ${interactive ? 'hover:scale-105 transition-transform duration-500 cursor-pointer shadow-[0_0_50px_rgba(212,175,55,0.4)]' : 'shadow-[0_0_30px_rgba(212,175,55,0.25)]'}
         `}
+        suppressHydrationWarning
         style={{
-          background: 'radial-gradient(circle, #fcefa6 0%, #d4af37 40%, #aa7c11 80%, #704f05 100%)',
+          // Use explicit backgroundImage (not background shorthand) to avoid SSR/client hydration mismatch
+          backgroundImage: 'radial-gradient(circle, #fcefa6 0%, #d4af37 40%, #aa7c11 80%, #704f05 100%)',
+          backgroundColor: '#d4af37',
           border: '8px double #aa7c11',
         }}
       >
