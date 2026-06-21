@@ -8,6 +8,20 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 type PaymentGateway = 'esewa' | 'khalti' | 'phonepay' | 'fonepay';
 
+type PaymentDetails = {
+  gateway?: string;
+  merchantId?: string;
+  serviceType?: string;
+  referenceNo?: string;
+  instructions?: string;
+  testMode?: boolean;
+  upiId?: string;
+  accountHolder?: string;
+  bankName?: string;
+  accountNumber?: string;
+  ifsc?: string;
+};
+
 const GATEWAYS: { id: PaymentGateway; label: string; color: string; bg: string; border: string; textColor: string; logo: string; desc: string }[] = [
   {
     id: 'esewa',
@@ -78,7 +92,7 @@ export default function PurchaseModal() {
   // Generated order details
   const [orderId, setOrderId] = useState('');
   const [amount, setAmount] = useState(0);
-  const [paymentDetails, setPaymentDetails] = useState<any>(null);
+  const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
   // Selected payment proof file
@@ -99,6 +113,10 @@ export default function PurchaseModal() {
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedGateway) {
+      setErrorMsg('Please select a payment gateway.');
+      return;
+    }
     setLoading(true);
     setErrorMsg('');
 
@@ -464,25 +482,59 @@ export default function PurchaseModal() {
                 <div className="bg-zinc-900/60 p-4 rounded-xl border border-zinc-800 space-y-3 text-xs">
                   <h4 className="text-[#f5d06f] font-bold uppercase tracking-wider text-[10px]">Payment Details</h4>
 
-                  {[
-                    { label: 'Account Holder', value: paymentDetails?.accountHolder },
-                    { label: 'Bank Name', value: paymentDetails?.bankName },
-                    { label: 'Account Number', value: paymentDetails?.accountNumber },
-                    { label: 'IFSC Code', value: paymentDetails?.ifsc },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="flex items-center justify-between border-b border-zinc-800 pb-1.5 last:border-0 last:pb-0">
-                      <span className="text-zinc-400">{label}:</span>
-                      <span className="font-mono text-white flex items-center gap-1.5">
-                        <span>{value}</span>
-                        {value && (
-                          <button onClick={() => copyToClipboard(value)} className="text-zinc-500 hover:text-[#f5d06f] transition-colors" title="Copy">
-                            <Clipboard className="w-3 h-3" />
-                          </button>
-                        )}
-                      </span>
-                    </div>
-                  ))}
+                  {paymentDetails?.gateway === 'esewa' ? (
+                    <>
+                      {[
+                        { label: 'Merchant ID', value: paymentDetails.merchantId },
+                        { label: 'Service Type', value: paymentDetails.serviceType },
+                        { label: 'Reference No.', value: paymentDetails.referenceNo },
+                      ].map(({ label, value }) => (
+                        <div key={label} className="flex items-center justify-between border-b border-zinc-800 pb-1.5 last:border-0 last:pb-0">
+                          <span className="text-zinc-400">{label}:</span>
+                          <span className="font-mono text-white flex items-center gap-1.5">
+                            <span>{value}</span>
+                            {value && (
+                              <button onClick={() => copyToClipboard(value)} className="text-zinc-500 hover:text-[#f5d06f] transition-colors" title="Copy">
+                                <Clipboard className="w-3 h-3" />
+                              </button>
+                            )}
+                          </span>
+                        </div>
+                      ))}
+                      {paymentDetails.testMode && (
+                        <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-2 text-[10px] text-green-300">
+                          eSewa test mode is active. Use the above merchant details to simulate payment, then upload the receipt screenshot.
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    [
+                      { label: 'Account Holder', value: paymentDetails?.accountHolder },
+                      { label: 'Bank Name', value: paymentDetails?.bankName },
+                      { label: 'Account Number', value: paymentDetails?.accountNumber },
+                      { label: 'IFSC Code', value: paymentDetails?.ifsc },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="flex items-center justify-between border-b border-zinc-800 pb-1.5 last:border-0 last:pb-0">
+                        <span className="text-zinc-400">{label}:</span>
+                        <span className="font-mono text-white flex items-center gap-1.5">
+                          <span>{value}</span>
+                          {value && (
+                            <button onClick={() => copyToClipboard(value)} className="text-zinc-500 hover:text-[#f5d06f] transition-colors" title="Copy">
+                              <Clipboard className="w-3 h-3" />
+                            </button>
+                          )}
+                        </span>
+                      </div>
+                    ))
+                  )}
                 </div>
+
+                {paymentDetails?.instructions && (
+                  <div className="bg-zinc-950 border border-zinc-800 p-3 rounded-xl text-[10px] text-zinc-300">
+                    <p className="font-bold text-zinc-100">Payment Instructions</p>
+                    <p className="mt-2 leading-5">{paymentDetails.instructions}</p>
+                  </div>
+                )}
 
                 {/* Upload Proof */}
                 <form onSubmit={handleUploadProof} className="space-y-4 pt-2 border-t border-zinc-800">
