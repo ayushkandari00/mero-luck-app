@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { authenticateToken, AuthRequest, requireAdmin } from '../middleware/auth';
 import prisma from '../db';
+import { VALID_PAYMENT_METHODS, getPaymentDetails } from '../utils/payment';
 
 const router = Router();
 
@@ -104,6 +105,7 @@ router.post('/purchase', authenticateToken, async (req: AuthRequest, res: Respon
     }
 
     const orderId = 'ORD-NUM-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+    const safePaymentMethod = VALID_PAYMENT_METHODS.includes(paymentMethod as any) ? paymentMethod : null;
 
     const result = await prisma.$transaction(async (tx) => {
       const transaction = await tx.transaction.create({
@@ -113,7 +115,7 @@ router.post('/purchase', authenticateToken, async (req: AuthRequest, res: Respon
           amount: price,
           status: 'PENDING',
           orderId,
-          paymentMethod: paymentMethod || null,
+          paymentMethod: safePaymentMethod,
         },
       });
 
@@ -132,13 +134,7 @@ router.post('/purchase', authenticateToken, async (req: AuthRequest, res: Respon
     return res.json({
       message: 'Order created and coin reserved. Please make payment and upload receipt.',
       transaction: result,
-      paymentDetails: {
-        upiId: 'meroluck@bank',
-        accountHolder: 'Mero Luck Collectibles Pvt Ltd',
-        bankName: 'Nepal Investment Mega Bank',
-        accountNumber: '00100200300405',
-        ifsc: 'NIMB0000001',
-      },
+      paymentDetails: getPaymentDetails(safePaymentMethod, orderId),
     });
   } catch (error: any) {
     return res.status(500).json({ message: 'Failed to purchase coin', error: error.message });

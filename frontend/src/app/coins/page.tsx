@@ -14,6 +14,20 @@ type Coin = {
 
 type PaymentGateway = 'esewa' | 'khalti' | 'phonepay' | 'fonepay';
 
+type PaymentDetails = {
+  gateway?: string;
+  merchantId?: string;
+  serviceType?: string;
+  referenceNo?: string;
+  instructions?: string;
+  testMode?: boolean;
+  upiId?: string;
+  accountHolder?: string;
+  bankName?: string;
+  accountNumber?: string;
+  ifsc?: string;
+};
+
 const GATEWAYS: { id: PaymentGateway; label: string; color: string; bg: string; border: string; textColor: string; desc: string }[] = [
   {
     id: 'esewa',
@@ -80,6 +94,7 @@ export default function NumberedCoinsMarketplace() {
   const [purchaseLoading, setPurchaseLoading] = useState(false);
   const [purchaseSuccess, setPurchaseSuccess] = useState<any>(null);
   const [purchaseError, setPurchaseError] = useState('');
+  const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null);
 
   // Receipt upload state
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
@@ -147,6 +162,7 @@ export default function NumberedCoinsMarketplace() {
         body: JSON.stringify({ coinNumber: selectedCoin.coinNumber, paymentMethod: selectedGateway }),
       });
       setPurchaseSuccess(res);
+      setPaymentDetails(res.paymentDetails || null);
       setCoins((prev) => prev.map((c) => (c.id === selectedCoin.id ? { ...c, status: 'RESERVED' } : c)));
       setPurchaseStep('payment');
     } catch (error: any) {
@@ -463,21 +479,54 @@ export default function NumberedCoinsMarketplace() {
                     {/* Payment Details */}
                     <div className="bg-zinc-900/80 border border-zinc-800 p-3 rounded-xl space-y-2 text-xs">
                       <p className="text-[#f5d06f] text-[10px] font-bold uppercase tracking-wider">Payment Details</p>
-                      {[
-                        { label: 'UPI ID', value: purchaseSuccess.paymentDetails?.upiId },
-                        { label: 'Account', value: purchaseSuccess.paymentDetails?.accountNumber },
-                      ].map(({ label, value }) => value && (
-                        <div key={label} className="flex justify-between items-center border-b border-zinc-800 pb-1.5 last:border-0">
-                          <span className="text-zinc-400">{label}:</span>
-                          <span className="font-mono text-white flex items-center gap-1.5">
-                            {value}
-                            <button onClick={() => copyToClipboard(value)} className="text-zinc-500 hover:text-[#f5d06f]">
-                              <Clipboard className="w-3 h-3" />
-                            </button>
-                          </span>
-                        </div>
-                      ))}
+                      {paymentDetails?.gateway === 'esewa' ? (
+                        <>
+                          {[
+                            { label: 'Merchant ID', value: paymentDetails.merchantId },
+                            { label: 'Service Type', value: paymentDetails.serviceType },
+                            { label: 'Reference No.', value: paymentDetails.referenceNo },
+                          ].map(({ label, value }) => value && (
+                            <div key={label} className="flex justify-between items-center border-b border-zinc-800 pb-1.5 last:border-0">
+                              <span className="text-zinc-400">{label}:</span>
+                              <span className="font-mono text-white flex items-center gap-1.5">
+                                {value}
+                                <button onClick={() => copyToClipboard(value)} className="text-zinc-500 hover:text-[#f5d06f]">
+                                  <Clipboard className="w-3 h-3" />
+                                </button>
+                              </span>
+                            </div>
+                          ))}
+                          {paymentDetails.testMode && (
+                            <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-2 text-[10px] text-green-300">
+                              eSewa test mode active. Use these merchant details to simulate payment, then upload your receipt screenshot.
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        [
+                          { label: 'UPI ID', value: paymentDetails?.upiId },
+                          { label: 'Account Number', value: paymentDetails?.accountNumber },
+                          { label: 'IFSC Code', value: paymentDetails?.ifsc },
+                        ].map(({ label, value }) => value && (
+                          <div key={label} className="flex justify-between items-center border-b border-zinc-800 pb-1.5 last:border-0">
+                            <span className="text-zinc-400">{label}:</span>
+                            <span className="font-mono text-white flex items-center gap-1.5">
+                              {value}
+                              <button onClick={() => copyToClipboard(value)} className="text-zinc-500 hover:text-[#f5d06f]">
+                                <Clipboard className="w-3 h-3" />
+                              </button>
+                            </span>
+                          </div>
+                        ))
+                      )}
                     </div>
+
+                    {paymentDetails?.instructions && (
+                      <div className="bg-zinc-950 border border-zinc-800 p-3 rounded-xl text-[10px] text-zinc-300">
+                        <p className="font-bold text-zinc-100">Payment Instructions</p>
+                        <p className="mt-2 leading-5">{paymentDetails.instructions}</p>
+                      </div>
+                    )}
 
                     {/* Upload Proof */}
                     <form onSubmit={handleUploadProof} className="space-y-3 pt-2 border-t border-zinc-800">

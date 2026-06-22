@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import prisma from '../db';
+import { VALID_PAYMENT_METHODS, getPaymentDetails } from '../utils/payment';
 
 const router = Router();
 
@@ -51,6 +52,8 @@ router.post('/buy-token', authenticateToken, async (req: AuthRequest, res: Respo
     const price = 250; 
     const orderId = 'ORD-TKN-' + Math.random().toString(36).substring(2, 10).toUpperCase();
 
+    const safePaymentMethod = VALID_PAYMENT_METHODS.includes(paymentMethod as any) ? paymentMethod : null;
+
     const transaction = await prisma.transaction.create({
       data: {
         userId,
@@ -58,20 +61,14 @@ router.post('/buy-token', authenticateToken, async (req: AuthRequest, res: Respo
         amount: price,
         status: 'PENDING',
         orderId,
-        paymentMethod: paymentMethod || null,
+        paymentMethod: safePaymentMethod,
       },
     });
 
     return res.json({
       message: 'Order created. Please make payment and upload receipt.',
       transaction,
-      paymentDetails: {
-        upiId: 'meroluck@bank',
-        accountHolder: 'Mero Luck Collectibles Pvt Ltd',
-        bankName: 'Nepal Investment Mega Bank',
-        accountNumber: '00100200300405',
-        ifsc: 'NIMB0000001',
-      },
+      paymentDetails: getPaymentDetails(safePaymentMethod, orderId),
     });
   } catch (error: any) {
     return res.status(500).json({ message: 'Failed to create token order', error: error.message });
@@ -88,9 +85,7 @@ router.post('/buy-coin', authenticateToken, async (req: AuthRequest, res: Respon
     const price = 2500 * qty;
     const orderId = 'ORD-COIN-' + Math.random().toString(36).substring(2, 10).toUpperCase();
 
-    // Validate paymentMethod
-    const validMethods = ['esewa', 'khalti', 'phonepay', 'fonepay'];
-    const safePaymentMethod = validMethods.includes(paymentMethod) ? paymentMethod : null;
+    const safePaymentMethod = VALID_PAYMENT_METHODS.includes(paymentMethod as any) ? paymentMethod : null;
 
     const address = await prisma.address.findUnique({ where: { userId } });
     if (!address) {
@@ -114,13 +109,7 @@ router.post('/buy-coin', authenticateToken, async (req: AuthRequest, res: Respon
     return res.json({
       message: 'Order created. Please make payment and upload receipt.',
       transaction,
-      paymentDetails: {
-        upiId: 'meroluck@bank',
-        accountHolder: 'Mero Luck Collectibles Pvt Ltd',
-        bankName: 'Nepal Investment Mega Bank',
-        accountNumber: '00100200300405',
-        ifsc: 'NIMB0000001',
-      },
+      paymentDetails: getPaymentDetails(safePaymentMethod, orderId),
     });
   } catch (error: any) {
     console.error('[Buy Coin Error]', error);
