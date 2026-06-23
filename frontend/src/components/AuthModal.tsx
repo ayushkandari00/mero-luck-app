@@ -49,7 +49,9 @@ export default function AuthModal() {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
-      // ─── SECURITY M3: Use centralized apiFetch instead of hardcoded localhost URL
+      // ─── SECURITY M3: Store token first so apiFetch can attach it on /users/me
+      localStorage.setItem('mero_token', res.accessToken);
+      localStorage.setItem('mero_refresh_token', res.refreshToken);
       const userData = await apiFetch('/users/me');
       setAuth(userData, res.accessToken, res.refreshToken);
       handleClose();

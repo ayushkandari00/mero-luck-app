@@ -132,9 +132,9 @@ router.post('/purchase', authenticateToken, async (req: AuthRequest, res: Respon
     });
 
     return res.json({
-      message: 'Order created and coin reserved. Please make payment and upload receipt.',
+      message: 'Order created and coin reserved. Please make payment.',
       transaction: result,
-      paymentDetails: getPaymentDetails(safePaymentMethod, orderId),
+      paymentDetails: getPaymentDetails(safePaymentMethod, orderId, price),
     });
   } catch (error: any) {
     return res.status(500).json({ message: 'Failed to purchase coin', error: error.message });

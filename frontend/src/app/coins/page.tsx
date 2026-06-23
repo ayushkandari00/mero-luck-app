@@ -12,20 +12,22 @@ type Coin = {
   user?: { email: string; profile: { firstName: string; lastName: string } };
 };
 
-type PaymentGateway = 'esewa' | 'khalti' | 'phonepay' | 'fonepay';
+type PaymentGateway = 'esewa';
 
 type PaymentDetails = {
   gateway?: string;
   merchantId?: string;
-  serviceType?: string;
-  referenceNo?: string;
+  productCode?: string;
+  signature?: string;
+  amount?: number;
+  taxAmount?: number;
+  totalAmount?: number;
+  transactionUuid?: string;
+  successUrl?: string;
+  failureUrl?: string;
+  url?: string;
   instructions?: string;
   testMode?: boolean;
-  upiId?: string;
-  accountHolder?: string;
-  bankName?: string;
-  accountNumber?: string;
-  ifsc?: string;
 };
 
 const GATEWAYS: { id: PaymentGateway; label: string; color: string; bg: string; border: string; textColor: string; desc: string }[] = [
@@ -36,45 +38,9 @@ const GATEWAYS: { id: PaymentGateway; label: string; color: string; bg: string; 
     bg: 'bg-green-950/30',
     border: 'border-green-500/40',
     textColor: 'text-green-400',
-    desc: "Nepal's #1 digital wallet",
-  },
-  {
-    id: 'khalti',
-    label: 'Khalti',
-    color: 'from-purple-600 to-purple-800',
-    bg: 'bg-purple-950/30',
-    border: 'border-purple-500/40',
-    textColor: 'text-purple-400',
-    desc: 'Fast & secure payments',
-  },
-  {
-    id: 'phonepay',
-    label: 'PhonePay',
-    color: 'from-blue-600 to-indigo-700',
-    bg: 'bg-blue-950/30',
-    border: 'border-blue-500/40',
-    textColor: 'text-blue-400',
-    desc: "India's trusted UPI app",
-  },
-  {
-    id: 'fonepay',
-    label: 'Fonepay',
-    color: 'from-red-600 to-red-700',
-    bg: 'bg-red-950/30',
-    border: 'border-red-500/40',
-    textColor: 'text-red-400',
-    desc: "Nepal's instant bank transfer & QR",
+    desc: "Nepal's #1 digital wallet — instant & secure",
   },
 ];
-
-// Replace null with actual image paths when QR codes are provided
-// e.g. '/qr/esewa-numbered.png'
-const QR_IMAGES: Record<PaymentGateway, string | null> = {
-  esewa: null,
-  khalti: null,
-  phonepay: null,
-  fonepay: null,
-};
 
 export default function NumberedCoinsMarketplace() {
   const [coins, setCoins] = useState<Coin[]>([]);
@@ -96,10 +62,8 @@ export default function NumberedCoinsMarketplace() {
   const [purchaseError, setPurchaseError] = useState('');
   const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null);
 
-  // Receipt upload state
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  // Receipt upload state (for non-eSewa gateways - unused now)
   const [uploadedFileName, setUploadedFileName] = useState('');
-  const [uploadLoading, setUploadLoading] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -140,8 +104,6 @@ export default function NumberedCoinsMarketplace() {
     setSelectedGateway(null);
     setPurchaseSuccess(null);
     setPurchaseError('');
-    setReceiptFile(null);
-    setUploadedFileName('');
   };
 
   const handleCloseModal = () => {
@@ -172,25 +134,6 @@ export default function NumberedCoinsMarketplace() {
     }
   };
 
-  const handleUploadProof = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!receiptFile || !purchaseSuccess) return;
-    setUploadLoading(true);
-    setPurchaseError('');
-    const formData = new FormData();
-    formData.append('receipt', receiptFile);
-    try {
-      await apiFetch(`/purchases/upload-proof/${purchaseSuccess.transaction.orderId}`, {
-        method: 'POST',
-        body: formData,
-      });
-      setPurchaseStep('completed');
-    } catch (err: any) {
-      setPurchaseError(err.message || 'Upload failed');
-    } finally {
-      setUploadLoading(false);
-    }
-  };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -453,71 +396,40 @@ export default function NumberedCoinsMarketplace() {
                       </div>
                     )}
 
-                    {/* QR Code */}
-                    <div className="flex flex-col items-center p-4 bg-white rounded-2xl border-2 border-amber-500/20">
-                      {activeGateway && QR_IMAGES[activeGateway.id] ? (
-                        <img
-                          src={QR_IMAGES[activeGateway.id]!}
-                          alt={`${activeGateway.label} QR`}
-                          className="w-40 h-40 object-contain rounded-lg"
-                        />
-                      ) : (
-                        <div className="w-40 h-40 bg-zinc-100 rounded-xl flex flex-col items-center justify-center border-2 border-dashed border-zinc-300 gap-2">
-                          <QrCode className="w-14 h-14 text-zinc-400" />
-                          <div className="text-center">
-                            <p className="text-zinc-600 text-[10px] font-bold">QR Code</p>
-                            <p className="text-zinc-400 text-[9px]">Coming soon</p>
-                          </div>
-                        </div>
-                      )}
+                    {/* eSewa Merchant QR */}
+                    <div className="flex flex-col items-center p-4 bg-white rounded-2xl border-2 border-green-500/20">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`esewa://pay?merchantId=${paymentDetails?.merchantId || 'EPAYTEST'}&amount=${purchaseSuccess.transaction.amount}&ref=${purchaseSuccess.transaction.orderId}`)}`}
+                        alt="eSewa Merchant QR"
+                        className="w-40 h-40 object-contain rounded-lg"
+                      />
                       <p className="text-[10px] text-zinc-500 font-bold mt-2 uppercase tracking-wider">
-                        Scan with {activeGateway?.label}
+                        Scan with eSewa App → Merchant Payment
                       </p>
                       <p className="text-[9px] text-zinc-400">Pay exactly: <span className="font-bold text-zinc-600">₹{purchaseSuccess.transaction.amount}</span></p>
                     </div>
 
-                    {/* Payment Details */}
+                    {/* eSewa Payment Details */}
                     <div className="bg-zinc-900/80 border border-zinc-800 p-3 rounded-xl space-y-2 text-xs">
                       <p className="text-[#f5d06f] text-[10px] font-bold uppercase tracking-wider">Payment Details</p>
-                      {paymentDetails?.gateway === 'esewa' ? (
-                        <>
-                          {[
-                            { label: 'Merchant ID', value: paymentDetails.merchantId },
-                            { label: 'Service Type', value: paymentDetails.serviceType },
-                            { label: 'Reference No.', value: paymentDetails.referenceNo },
-                          ].map(({ label, value }) => value && (
-                            <div key={label} className="flex justify-between items-center border-b border-zinc-800 pb-1.5 last:border-0">
-                              <span className="text-zinc-400">{label}:</span>
-                              <span className="font-mono text-white flex items-center gap-1.5">
-                                {value}
-                                <button onClick={() => copyToClipboard(value)} className="text-zinc-500 hover:text-[#f5d06f]">
-                                  <Clipboard className="w-3 h-3" />
-                                </button>
-                              </span>
-                            </div>
-                          ))}
-                          {paymentDetails.testMode && (
-                            <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-2 text-[10px] text-green-300">
-                              eSewa test mode active. Use these merchant details to simulate payment, then upload your receipt screenshot.
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        [
-                          { label: 'UPI ID', value: paymentDetails?.upiId },
-                          { label: 'Account Number', value: paymentDetails?.accountNumber },
-                          { label: 'IFSC Code', value: paymentDetails?.ifsc },
-                        ].map(({ label, value }) => value && (
-                          <div key={label} className="flex justify-between items-center border-b border-zinc-800 pb-1.5 last:border-0">
-                            <span className="text-zinc-400">{label}:</span>
-                            <span className="font-mono text-white flex items-center gap-1.5">
-                              {value}
-                              <button onClick={() => copyToClipboard(value)} className="text-zinc-500 hover:text-[#f5d06f]">
-                                <Clipboard className="w-3 h-3" />
-                              </button>
-                            </span>
-                          </div>
-                        ))
+                      {[
+                        { label: 'Merchant ID', value: paymentDetails?.merchantId },
+                        { label: 'Reference No.', value: purchaseSuccess?.transaction?.orderId },
+                      ].map(({ label, value }) => value && (
+                        <div key={label} className="flex justify-between items-center border-b border-zinc-800 pb-1.5 last:border-0">
+                          <span className="text-zinc-400">{label}:</span>
+                          <span className="font-mono text-white flex items-center gap-1.5">
+                            {value}
+                            <button onClick={() => copyToClipboard(value)} className="text-zinc-500 hover:text-[#f5d06f]">
+                              <Clipboard className="w-3 h-3" />
+                            </button>
+                          </span>
+                        </div>
+                      ))}
+                      {paymentDetails?.testMode && (
+                        <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-2 text-[10px] text-green-300">
+                          🧪 Sandbox — Login: 9806800001, Password: Nepal@123, MPIN: 1122
+                        </div>
                       )}
                     </div>
 
@@ -528,35 +440,32 @@ export default function NumberedCoinsMarketplace() {
                       </div>
                     )}
 
-                    {/* Upload Proof */}
-                    <form onSubmit={handleUploadProof} className="space-y-3 pt-2 border-t border-zinc-800">
-                      <h4 className="text-white text-xs font-bold uppercase tracking-wider">Upload Payment Receipt</h4>
-                      <label className="flex flex-col items-center justify-center border-2 border-dashed border-zinc-700 hover:border-amber-500/50 bg-zinc-950 p-4 rounded-xl cursor-pointer transition group">
-                        <Upload className="w-5 h-5 text-zinc-500 group-hover:text-[#f5d06f] mb-1.5" />
-                        <span className="text-xs text-zinc-400 group-hover:text-white">
-                          {uploadedFileName || 'Select receipt screenshot'}
-                        </span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          required
-                          className="hidden"
-                          onChange={(e) => {
-                            if (e.target.files?.[0]) {
-                              setReceiptFile(e.target.files[0]);
-                              setUploadedFileName(e.target.files[0].name);
-                            }
-                          }}
-                        />
-                      </label>
-                      <button
-                        type="submit"
-                        disabled={uploadLoading || !receiptFile}
-                        className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-black rounded-xl font-bold transition text-sm disabled:opacity-40"
-                      >
-                        {uploadLoading ? 'Uploading...' : 'Submit Payment Proof'}
-                      </button>
-                    </form>
+                    {/* Action Form */}
+                    {paymentDetails?.gateway === 'esewa' ? (
+                      <form action={paymentDetails.url} method="POST" className="space-y-3 pt-4 border-t border-zinc-800">
+                        <input type="hidden" name="amount" value={paymentDetails.amount} />
+                        <input type="hidden" name="tax_amount" value={paymentDetails.taxAmount} />
+                        <input type="hidden" name="total_amount" value={paymentDetails.totalAmount} />
+                        <input type="hidden" name="transaction_uuid" value={paymentDetails.transactionUuid} />
+                        <input type="hidden" name="product_code" value={paymentDetails.productCode} />
+                        <input type="hidden" name="product_service_charge" value="0" />
+                        <input type="hidden" name="product_delivery_charge" value="0" />
+                        <input type="hidden" name="success_url" value={paymentDetails.successUrl} />
+                        <input type="hidden" name="failure_url" value={paymentDetails.failureUrl} />
+                        <input type="hidden" name="signed_field_names" value="total_amount,transaction_uuid,product_code" />
+                        <input type="hidden" name="signature" value={paymentDetails.signature} />
+                        
+                        <button
+                          type="submit"
+                          className="w-full py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl font-bold transition text-sm shadow-[0_0_15px_rgba(34,197,94,0.3)] flex justify-center items-center gap-2"
+                        >
+                          Proceed to eSewa Web Gateway <ChevronRight className="w-4 h-4" />
+                        </button>
+                        <p className="text-center text-[10px] text-zinc-500 mt-2">
+                          If you paid via Merchant QR, you can close this window. Your payment will be verified manually.
+                        </p>
+                      </form>
+                    )}
                   </motion.div>
                 )}
 

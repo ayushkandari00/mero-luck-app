@@ -68,7 +68,7 @@ router.post('/buy-token', authenticateToken, async (req: AuthRequest, res: Respo
     return res.json({
       message: 'Order created. Please make payment and upload receipt.',
       transaction,
-      paymentDetails: getPaymentDetails(safePaymentMethod, orderId),
+      paymentDetails: getPaymentDetails(safePaymentMethod, orderId, price),
     });
   } catch (error: any) {
     return res.status(500).json({ message: 'Failed to create token order', error: error.message });
@@ -109,7 +109,7 @@ router.post('/buy-coin', authenticateToken, async (req: AuthRequest, res: Respon
     return res.json({
       message: 'Order created. Please make payment and upload receipt.',
       transaction,
-      paymentDetails: getPaymentDetails(safePaymentMethod, orderId),
+      paymentDetails: getPaymentDetails(safePaymentMethod, orderId, price),
     });
   } catch (error: any) {
     console.error('[Buy Coin Error]', error);
@@ -192,6 +192,77 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     return res.json(transactions);
   } catch (error: any) {
     return res.status(500).json({ message: 'Failed to fetch transactions', error: error.message });
+  }
+});
+
+// Verify eSewa Payment Callback
+router.post('/verify-esewa', async (req, res) => {
+  try {
+    const { data } = req.body;
+    
+    if (!data) {
+      return res.status(400).json({ message: 'Data is required' });
+    }
+
+    const secretKey = process.env.ESEWA_SECRET_KEY || '8gBm/:&EnhH.1/q';
+    const { verifyEsewaSignature } = require('../utils/payment');
+    
+    const { isValid, parsedData } = verifyEsewaSignature(data, secretKey);
+    
+    if (!isValid) {
+      return res.status(400).json({ message: 'Invalid payment signature' });
+    }
+    
+    if (parsedData.status !== 'COMPLETE') {
+      return res.status(400).json({ message: 'Payment not completed', data: parsedData });
+    }
+    
+    const orderId = parsedData.transaction_uuid;
+    
+    // Find transaction
+    const transaction = await prisma.transaction.findUnique({
+      where: { orderId }
+    });
+    
+    if (!transaction) {
+      return res.status(404).json({ message: 'Transaction not found' });
+    }
+    
+    if (transaction.status === 'APPROVED') {
+      return res.json({ message: 'Payment already verified', transaction });
+    }
+    
+    // Check amount mismatch
+    // eSewa total_amount includes commas like 1,000.0
+    const esewaAmount = parseFloat(parsedData.total_amount.replace(/,/g, ''));
+    if (transaction.amount !== esewaAmount) {
+      return res.status(400).json({ message: 'Amount mismatch', expected: transaction.amount, actual: esewaAmount });
+    }
+    
+    // Update transaction
+    const updatedTransaction = await prisma.transaction.update({
+      where: { orderId },
+      data: {
+        status: 'APPROVED',
+      }
+    });
+    
+    await prisma.notification.create({
+      data: {
+        userId: transaction.userId,
+        message: `Your eSewa payment for order ${orderId} was successful and verified.`,
+      },
+    });
+    
+    return res.json({
+      message: 'Payment verified successfully',
+      transaction: updatedTransaction,
+      details: parsedData
+    });
+    
+  } catch (error: any) {
+    console.error('[Verify eSewa Error]', error);
+    return res.status(500).json({ message: 'Failed to verify payment', error: error.message });
   }
 });
 
