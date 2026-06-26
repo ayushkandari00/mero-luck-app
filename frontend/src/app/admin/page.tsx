@@ -543,7 +543,7 @@ export default function AdminDashboard() {
                       <td className="py-3">
                         {tx.paymentProofUrl ? (
                           <a 
-                            href={`http://localhost:5000${tx.paymentProofUrl}`} 
+                            href={`${API_BASE}${tx.paymentProofUrl}`} 
                             target="_blank" 
                             rel="noreferrer"
                             className="text-amber-600 hover:underline font-bold flex items-center space-x-1"
