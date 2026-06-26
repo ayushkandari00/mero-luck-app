@@ -399,4 +399,128 @@ router.post('/draws/:id/pick-winners', authenticateToken, requireAdmin, async (r
   }
 });
 
+// ─── GET /admin/payment-issues — list all reported payment disputes ───────────
+router.get('/payment-issues', authenticateToken, requireAdmin, async (_req, res: Response) => {
+  try {
+    const issues = await prisma.paymentIssue.findMany({
+      include: {
+        user: {
+          select: {
+            email: true,
+            profile: { select: { firstName: true, lastName: true } },
+          },
+        },
+        transaction: {
+          select: { orderId: true, amount: true, type: true, status: true, paymentMethod: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return res.json(issues);
+  } catch (error: any) {
+    console.error('[Admin Payment Issues Error]', error);
+    return res.status(500).json({ message: 'Failed to fetch payment issues.' });
+  }
+});
+
+// ─── POST /admin/payment-issues/:id/resolve — approve or reject a dispute ────
+router.post('/payment-issues/:id/resolve', authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const { action, adminNote } = req.body; // action: 'APPROVE' | 'REJECT'
+
+  if (!['APPROVE', 'REJECT'].includes(action)) {
+    return res.status(400).json({ message: 'action must be APPROVE or REJECT.' });
+  }
+
+  try {
+    const issue = await prisma.paymentIssue.findUnique({
+      where: { id },
+      include: { transaction: true },
+    });
+    if (!issue) return res.status(404).json({ message: 'Payment issue not found.' });
+    if (issue.status !== 'OPEN') return res.status(400).json({ message: `This issue is already ${issue.status}.` });
+
+    const newStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+
+    // If approving and there's a linked transaction that's still pending — assign a ticket
+    let luckyNumber: string | undefined;
+    if (action === 'APPROVE' && issue.transactionId && issue.transaction?.status === 'PENDING') {
+      try {
+        // Use the shared ticket assignment logic
+        const { PrismaClient } = require('@prisma/client');
+        const activeDraw = await prisma.draw.findFirst({ where: { status: 'ACTIVE' } });
+
+        await prisma.$transaction(async (tx: any) => {
+          await tx.transaction.update({
+            where: { id: issue.transactionId! },
+            data: { status: 'APPROVED' },
+          });
+
+          let luckyNumStr = '';
+          let unique = false;
+          while (!unique) {
+            const num = Math.floor(100000 + Math.random() * 900000);
+            luckyNumStr = num.toString();
+            const existing = await tx.luckyNumber.findUnique({ where: { number: luckyNumStr } });
+            if (!existing) unique = true;
+          }
+          luckyNumber = luckyNumStr;
+
+          const luckyNumberRecord = await tx.luckyNumber.create({
+            data: { number: luckyNumStr, userId: issue.transaction!.userId },
+          });
+
+          const txType = issue.transaction!.type;
+          if (txType === 'TOKEN_PURCHASE') {
+            await tx.digitalToken.create({
+              data: { userId: issue.transaction!.userId, luckyNumberId: luckyNumberRecord.id, status: 'ACTIVE' },
+            });
+          } else if (txType === 'COIN_PURCHASE') {
+            const serial = 'SN-' + Math.random().toString(36).substring(2, 8).toUpperCase() + '-' + Math.floor(1000 + Math.random() * 9000);
+            await tx.physicalCoin.create({
+              data: { userId: issue.transaction!.userId, luckyNumberId: luckyNumberRecord.id, serialNumber: serial, shippingStatus: 'PROCESSING', status: 'APPROVED' },
+            });
+          }
+
+          if (activeDraw) {
+            await tx.entry.create({
+              data: { drawId: activeDraw.id, userId: issue.transaction!.userId, luckyNumberId: luckyNumberRecord.id, status: 'ACTIVE' },
+            });
+          }
+        });
+      } catch (ticketErr: any) {
+        console.error('[Ticket Assignment on Issue Resolve Error]', ticketErr);
+      }
+    }
+
+    // Update the issue record
+    await prisma.paymentIssue.update({
+      where: { id },
+      data: { status: newStatus, adminNote: adminNote?.trim() || null },
+    });
+
+    // Notify the user
+    if (issue.userId) {
+      const noteText = adminNote ? ` Admin note: ${adminNote}` : '';
+      const ticketText = luckyNumber ? ` Lucky Number ${luckyNumber} has been assigned.` : '';
+      await prisma.notification.create({
+        data: {
+          userId: issue.userId,
+          message: action === 'APPROVE'
+            ? `✅ Your payment dispute (Ref: ${id.slice(0, 8).toUpperCase()}) has been approved!${ticketText}${noteText}`
+            : `❌ Your payment dispute (Ref: ${id.slice(0, 8).toUpperCase()}) was reviewed and could not be approved.${noteText}`,
+        },
+      });
+    }
+
+    return res.json({
+      message: `Issue ${newStatus.toLowerCase()} successfully.`,
+      luckyNumber: luckyNumber || null,
+    });
+  } catch (error: any) {
+    console.error('[Resolve Issue Error]', error);
+    return res.status(500).json({ message: 'Failed to resolve payment issue.', error: error.message });
+  }
+});
+
 export default router;

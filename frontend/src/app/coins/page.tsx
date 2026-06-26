@@ -441,7 +441,7 @@ export default function NumberedCoinsMarketplace() {
                     )}
 
                     {/* Action Form */}
-                    {paymentDetails?.gateway === 'esewa' ? (
+                    {paymentDetails?.gateway === 'esewa' && (
                       <form action={paymentDetails.url} method="POST" className="space-y-3 pt-4 border-t border-zinc-800">
                         <input type="hidden" name="amount" value={paymentDetails.amount} />
                         <input type="hidden" name="tax_amount" value={paymentDetails.taxAmount} />

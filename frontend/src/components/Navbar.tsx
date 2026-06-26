@@ -94,6 +94,9 @@ export default function Navbar() {
           <Link href="/" className={`text-xs font-bold uppercase tracking-wider transition-colors ${pathname === '/' ? 'text-[#f5d06f]' : 'text-zinc-300 hover:text-white'}`}>
             Home
           </Link>
+          <Link href="/coins" className={`text-xs font-bold uppercase tracking-wider transition-colors ${pathname === '/coins' ? 'text-[#f5d06f]' : 'text-zinc-300 hover:text-white'}`}>
+            Premium Coins
+          </Link>
           <Link href="/live-purchase" className={`text-xs font-bold uppercase tracking-wider transition-colors ${pathname === '/live-purchase' ? 'text-[#f5d06f]' : 'text-zinc-300 hover:text-white'}`}>
             Live Purchases
           </Link>

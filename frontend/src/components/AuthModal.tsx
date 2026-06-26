@@ -2,12 +2,12 @@
 
 import React, { useState } from 'react';
 import { useAuthStore } from '../store/authStore';
-import { X, ShieldCheck, Mail, Lock, Phone, User, Award } from 'lucide-react';
+import { X, ShieldCheck, Mail, Lock, Phone, User, Award, KeyRound, ArrowLeft, CheckCircle } from 'lucide-react';
 import { apiFetch } from '../utils/api';
 
 export default function AuthModal() {
   const { loginModalOpen, setLoginModal, setAuth } = useAuthStore();
-  const [mode, setMode] = useState<'login' | 'register' | 'otp'>('login');
+  const [mode, setMode] = useState<'login' | 'register' | 'otp' | 'forgot' | 'forgot-success'>('login');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   
@@ -23,6 +23,9 @@ export default function AuthModal() {
   const [otpCode, setOtpCode] = useState('');
   const [otpSentMsg, setOtpSentMsg] = useState('');
 
+  // Forgot password
+  const [forgotEmail, setForgotEmail] = useState('');
+
   if (!loginModalOpen) return null;
 
   const handleClose = () => {
@@ -36,6 +39,7 @@ export default function AuthModal() {
     setOtpCode('');
     setOtpSentMsg('');
     setErrorMsg('');
+    setForgotEmail('');
     setMode('login');
   };
 
@@ -122,9 +126,26 @@ export default function AuthModal() {
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrorMsg('');
+
+    try {
+      await apiFetch('/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+      setMode('forgot-success');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to send reset email. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleGoogleLoginMock = async () => {
     // ─── SECURITY C3: Google OAuth mock is disabled — backend returns 503.
-    // This button now informs the user instead of sending fake credentials.
     setErrorMsg('Google login is not yet available. Please use email/password to sign in.');
   };
 
@@ -139,7 +160,9 @@ export default function AuthModal() {
               <ShieldCheck className="w-4.5 h-4.5 text-[#f5d06f]" />
               <span>Mero Luck Registry</span>
             </h3>
-            <p className="text-[10px] text-zinc-400">Authentic credentials required</p>
+            <p className="text-[10px] text-zinc-400">
+              {mode === 'forgot' || mode === 'forgot-success' ? 'Secure password recovery' : 'Authentic credentials required'}
+            </p>
           </div>
           <button onClick={handleClose} className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">
             <X className="w-5 h-5" />
@@ -154,6 +177,7 @@ export default function AuthModal() {
             </div>
           )}
 
+          {/* ── LOGIN FORM ── */}
           {mode === 'login' && (
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-3">
@@ -186,6 +210,17 @@ export default function AuthModal() {
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Forgot Password Link */}
+              <div className="text-right">
+                <button
+                  type="button"
+                  onClick={() => { setErrorMsg(''); setMode('forgot'); }}
+                  className="text-[10px] text-[#f5d06f]/70 hover:text-[#f5d06f] hover:underline transition-colors"
+                >
+                  Forgot password?
+                </button>
               </div>
 
               <button
@@ -226,6 +261,7 @@ export default function AuthModal() {
             </form>
           )}
 
+          {/* ── REGISTER FORM ── */}
           {mode === 'register' && (
             <form onSubmit={handleRegister} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
@@ -294,7 +330,7 @@ export default function AuthModal() {
                   <input
                     type="password"
                     required
-                    placeholder="Min 6 characters"
+                    placeholder="Min 8 chars, 1 letter & 1 number"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-8 pr-3 py-2 text-white text-xs focus:outline-none focus:border-[#d4af37]"
@@ -340,6 +376,7 @@ export default function AuthModal() {
             </form>
           )}
 
+          {/* ── OTP FORM ── */}
           {mode === 'otp' && (
             <form onSubmit={handleVerifyOtp} className="space-y-4">
               <div className="bg-[#0b6b3a]/10 border border-[#0b6b3a]/30 p-4 rounded-xl text-center space-y-1">
@@ -376,6 +413,85 @@ export default function AuthModal() {
                 Verification logs are outputted to the backend console terminal server logs.
               </p>
             </form>
+          )}
+
+          {/* ── FORGOT PASSWORD FORM ── */}
+          {mode === 'forgot' && (
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div className="text-center space-y-2 pb-2">
+                <div className="w-12 h-12 bg-amber-500/10 border border-amber-500/20 rounded-full flex items-center justify-center mx-auto">
+                  <KeyRound className="w-5 h-5 text-[#f5d06f]" />
+                </div>
+                <h4 className="text-white font-bold text-sm">Forgot Your Password?</h4>
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  Enter your registered email address and we'll send you a secure link to reset your password.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-zinc-400 mb-1">Registered Email Address</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-2.5 w-4 h-4 text-zinc-500" />
+                  <input
+                    type="email"
+                    required
+                    placeholder="you@example.com"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-white text-xs focus:outline-none focus:border-[#d4af37]"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-2.5 bg-gold-gradient text-amber-950 font-bold text-xs uppercase tracking-wider rounded-lg hover:opacity-90 transition-opacity"
+              >
+                {loading ? 'Sending Reset Link...' : 'Send Reset Link'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setErrorMsg(''); setMode('login'); }}
+                className="w-full py-2 border border-zinc-700 text-zinc-400 text-xs rounded-lg hover:border-zinc-500 hover:text-zinc-300 transition-colors flex items-center justify-center space-x-1"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to Sign In</span>
+              </button>
+            </form>
+          )}
+
+          {/* ── FORGOT PASSWORD SUCCESS ── */}
+          {mode === 'forgot-success' && (
+            <div className="space-y-5 text-center py-4">
+              <div className="w-16 h-16 bg-green-500/10 border border-green-500/30 rounded-full flex items-center justify-center mx-auto">
+                <CheckCircle className="w-8 h-8 text-green-400" />
+              </div>
+              <div className="space-y-2">
+                <h4 className="text-white font-bold text-sm">Check Your Email</h4>
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  If an account exists for <strong className="text-zinc-300">{forgotEmail}</strong>, a password reset link has been sent. The link expires in <strong className="text-[#f5d06f]">30 minutes</strong>.
+                </p>
+                <p className="text-[10px] text-zinc-500">
+                  Didn't receive it? Check your spam folder, or try again.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <button
+                  onClick={() => { setMode('forgot'); setForgotEmail(''); setErrorMsg(''); }}
+                  className="w-full py-2 border border-zinc-700 text-zinc-400 text-xs rounded-lg hover:border-zinc-500 hover:text-zinc-300 transition-colors"
+                >
+                  Try a Different Email
+                </button>
+                <button
+                  onClick={() => { setMode('login'); setErrorMsg(''); }}
+                  className="w-full py-2 bg-gold-gradient text-amber-950 text-xs font-bold rounded-lg"
+                >
+                  Back to Sign In
+                </button>
+              </div>
+            </div>
           )}
 
         </div>

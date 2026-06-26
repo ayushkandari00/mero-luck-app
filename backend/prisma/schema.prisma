@@ -28,6 +28,8 @@ model User {
   auditLogs     AuditLog[]
   winners       Winner[]
   numberedCoins NumberedCoin[]
+  resetTokens   PasswordResetToken[]
+  paymentIssues PaymentIssue[]
 }
 
 model Profile {
@@ -126,17 +128,19 @@ model Winner {
 }
 
 model Transaction {
-  id              String        @id @default(uuid())
-  userId          String
-  user            User          @relation(fields: [userId], references: [id])
-  type            String // TOKEN_PURCHASE, COIN_PURCHASE, NUMBERED_COIN_PURCHASE
-  amount          Float
-  status          String        @default("PENDING") // PENDING, APPROVED, REJECTED
-  paymentProofUrl String?
-  paymentMethod   String?       // esewa, khalti, phonepay, fonepay
-  orderId         String        @unique
-  createdAt       DateTime      @default(now())
-  numberedCoin    NumberedCoin?
+  id                    String        @id @default(uuid())
+  userId                String
+  user                  User          @relation(fields: [userId], references: [id])
+  type                  String // TOKEN_PURCHASE, COIN_PURCHASE, NUMBERED_COIN_PURCHASE
+  amount                Float
+  status                String        @default("PENDING") // PENDING, APPROVED, REJECTED
+  paymentProofUrl       String?
+  paymentMethod         String?       // esewa, khalti, phonepay, fonepay
+  orderId               String        @unique
+  esewaTransactionCode  String?       // eSewa transaction_code after verified
+  createdAt             DateTime      @default(now())
+  numberedCoin          NumberedCoin?
+  paymentIssues         PaymentIssue[]
 }
 
 model Referral {
@@ -174,6 +178,22 @@ model AuditLog {
   createdAt DateTime @default(now())
 }
 
+model AppSettings {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
 model NumberedCoin {
   id            String       @id @default(uuid())
   coinNumber    String       @unique // "000001" to "100000"
@@ -183,4 +203,19 @@ model NumberedCoin {
   transactionId String?      @unique
   transaction   Transaction? @relation(fields: [transactionId], references: [id])
   purchaseDate  DateTime?
+}
+
+model PaymentIssue {
+  id                   String       @id @default(uuid())
+  transactionId        String?      // optional link to existing order
+  transaction          Transaction? @relation(fields: [transactionId], references: [id])
+  userId               String?
+  user                 User?        @relation(fields: [userId], references: [id])
+  esewaTransactionId   String       // eSewa TXN ID entered by user
+  screenshotUrl        String?      // uploaded screenshot path
+  message              String?      // user free-text message
+  status               String       @default("OPEN") // OPEN, APPROVED, REJECTED
+  adminNote            String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
 }

@@ -17,6 +17,7 @@ import purchaseRoutes from './routes/purchases';
 import drawRoutes from './routes/draws';
 import adminRoutes from './routes/admin';
 import numberedCoinRoutes from './routes/numbered-coins';
+import settingsRoutes from './routes/settings';
 import { authenticateToken, AuthRequest } from './middleware/auth';
 import prisma from './db';
 
@@ -84,6 +85,8 @@ app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/auth/otp/send', otpLimiter);
 app.use('/api/auth/otp/verify', authLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
+app.use('/api/auth/reset-password', authLimiter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -91,6 +94,7 @@ app.use('/api/purchases', purchaseRoutes);
 app.use('/api/draws', drawRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/numbered-coins', numberedCoinRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // ─── SECURITY C5: Authenticated upload serving ───────────────────────────────
 // Only admin or the owner of the transaction can view payment proof files.

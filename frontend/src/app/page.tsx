@@ -21,6 +21,10 @@ export default function Home() {
     drawDate: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000), // 6 months
   });
 
+  // Dynamic prices
+  const [tokenPrice, setTokenPrice] = useState(250);
+  const [coinPrice, setCoinPrice] = useState(2500);
+
   // Countdown timer state
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
@@ -40,6 +44,15 @@ export default function Home() {
         if (res.hasActiveDraw) {
           setStats(res);
         }
+      })
+      .catch(console.error);
+
+    // Fetch dynamic prices
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/settings/public`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.token_price) setTokenPrice(parseFloat(data.token_price));
+        if (data.coin_price) setCoinPrice(parseFloat(data.coin_price));
       })
       .catch(console.error);
   }, []);
@@ -177,13 +190,13 @@ export default function Home() {
                 className="w-full sm:w-auto px-8 py-3 bg-gold-gradient text-amber-950 font-black text-xs uppercase tracking-wider rounded-lg shadow-[0_4px_20px_rgba(212,175,55,0.3)] hover:opacity-95 transition-all flex items-center justify-center space-x-2 cursor-pointer"
               >
                 <Coins className="w-4 h-4" />
-                <span>Buy Physical Coin (₹2500)</span>
+                <span>Buy Physical Coin (₹{coinPrice.toLocaleString()})</span>
               </button>
               <button
                 onClick={() => handleBuyClick('token')}
                 className="w-full sm:w-auto px-8 py-3 bg-[#0b6b3a] hover:bg-[#0e8a47] border border-amber-500/20 text-white font-black text-xs uppercase tracking-wider rounded-lg transition-all flex items-center justify-center space-x-2 cursor-pointer"
               >
-                <span>Buy Digital Token (₹250)</span>
+                <span>Buy Digital Token (₹{tokenPrice.toLocaleString()})</span>
               </button>
             </div>
           </div>

@@ -2,7 +2,9 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 import prisma from '../db';
+import { sendPasswordResetEmail } from '../utils/email';
 
 const router = Router();
 
@@ -295,6 +297,123 @@ router.post('/google-login', async (req: Request, res: Response) => {
   return res.status(503).json({
     message: 'Google OAuth is not yet configured for production. Please use email/password login.',
   });
+});
+
+// ─── Forgot Password ──────────────────────────────────────────────────────────
+router.post('/forgot-password', async (req: Request, res: Response) => {
+  const { email } = req.body;
+
+  // Always return the same success message to prevent email enumeration
+  const SUCCESS_MSG = 'If an account with that email exists, a password reset link has been sent.';
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ message: 'A valid email address is required.' });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { profile: { select: { firstName: true } } },
+    });
+
+    if (!user) {
+      // Return success even if user not found (prevents enumeration)
+      return res.json({ message: SUCCESS_MSG });
+    }
+
+    // Invalidate any existing unused tokens for this user
+    await prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, used: false },
+      data: { used: true },
+    });
+
+    // Generate a secure random token
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt,
+      },
+    });
+
+    // Send the reset email (fire and forget to avoid timing attacks)
+    sendPasswordResetEmail(
+      user.email,
+      rawToken,
+      user.profile?.firstName || undefined
+    ).catch((err) => {
+      console.error('[Email Send Error]', err);
+    });
+
+    return res.json({ message: SUCCESS_MSG });
+  } catch (error: any) {
+    console.error('[Forgot Password Error]', error);
+    return res.status(500).json({ message: 'Failed to process request. Please try again.' });
+  }
+});
+
+// ─── Reset Password ───────────────────────────────────────────────────────────
+router.post('/reset-password', async (req: Request, res: Response) => {
+  const { token, newPassword } = req.body;
+
+  if (!token || !newPassword) {
+    return res.status(400).json({ message: 'Token and new password are required.' });
+  }
+
+  // ─── SECURITY: Validate password strength ─────────────────────────────────
+  const pwError = validatePassword(newPassword);
+  if (pwError) {
+    return res.status(400).json({ message: pwError });
+  }
+
+  try {
+    // Hash the raw token from URL to look it up
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const resetRecord = await prisma.passwordResetToken.findUnique({
+      where: { tokenHash },
+    });
+
+    if (!resetRecord) {
+      return res.status(400).json({ message: 'Invalid or expired password reset link.' });
+    }
+
+    if (resetRecord.used) {
+      return res.status(400).json({ message: 'This reset link has already been used. Please request a new one.' });
+    }
+
+    if (new Date() > resetRecord.expiresAt) {
+      // Mark as used to clean up
+      await prisma.passwordResetToken.update({
+        where: { tokenHash },
+        data: { used: true },
+      });
+      return res.status(400).json({ message: 'This reset link has expired. Please request a new one.' });
+    }
+
+    // Hash the new password and update the user
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: resetRecord.userId },
+        data: { passwordHash },
+      });
+      await tx.passwordResetToken.update({
+        where: { tokenHash },
+        data: { used: true },
+      });
+    });
+
+    return res.json({ message: 'Password reset successfully! You can now log in with your new password.' });
+  } catch (error: any) {
+    console.error('[Reset Password Error]', error);
+    return res.status(500).json({ message: 'Failed to reset password. Please try again.' });
+  }
 });
 
 export default router;

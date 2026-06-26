@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { X, CheckCircle2, Clipboard, ChevronRight, QrCode } from 'lucide-react';
 import { apiFetch } from '../utils/api';
@@ -41,6 +41,11 @@ export default function PurchaseModal() {
   const [step, setStep] = useState<'details' | 'gateway' | 'payment' | 'completed'>('details');
   const [loading, setLoading] = useState(false);
 
+  // Dynamic settings
+  const [tokenPrice, setTokenPrice] = useState(250);
+  const [coinPrice, setCoinPrice] = useState(2500);
+  const [paymentQrUrl, setPaymentQrUrl] = useState('');
+
   // Coin quantity / Shipping address details
   const [quantity, setQuantity] = useState(1);
   const [street, setStreet] = useState('');
@@ -58,11 +63,31 @@ export default function PurchaseModal() {
   const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Fetch dynamic settings on mount
+  useEffect(() => {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/settings/public`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.token_price) setTokenPrice(parseFloat(data.token_price));
+        if (data.coin_price) setCoinPrice(parseFloat(data.coin_price));
+        if (data.payment_qr_url) setPaymentQrUrl(data.payment_qr_url);
+      })
+      .catch(console.error);
+  }, []);
+
   const getEsewaQrUrl = () => {
     const merchantId = paymentDetails?.merchantId || 'EPAYTEST';
     const refNo = orderId || 'N/A';
     const esewaData = `esewa://pay?merchantId=${merchantId}&amount=${amount}&ref=${refNo}`;
     return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(esewaData)}`;
+  };
+
+  const getDisplayQrUrl = () => {
+    // Use admin-uploaded QR if available, otherwise fall back to eSewa QR generator
+    if (paymentQrUrl) {
+      return `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000'}${paymentQrUrl}`;
+    }
+    return getEsewaQrUrl();
   };
 
   if (!buyModalOpen) return null;
@@ -198,7 +223,7 @@ export default function PurchaseModal() {
                       <h4 className="text-white text-xs font-bold uppercase tracking-wider">Premium Physical Coin Package</h4>
                       <p className="text-xs text-zinc-300">
                         Each coin is engraved with a unique, verified 6-digit lucky number and shipped with custom collector boxing.
-                        Cost: <span className="text-amber-400 font-bold">₹2,500</span> per coin.
+                        Cost: <span className="text-amber-400 font-bold">₹{coinPrice.toLocaleString()}</span> per coin.
                       </p>
                       <div className="flex items-center space-x-3 pt-2">
                         <label className="text-xs text-zinc-400">Quantity:</label>
@@ -210,7 +235,7 @@ export default function PurchaseModal() {
                           onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
                           className="bg-zinc-900 border border-zinc-700 rounded px-2.5 py-1 text-white text-xs w-16 text-center font-bold"
                         />
-                        <span className="text-xs text-[#f5d06f] font-bold">Total: ₹{quantity * 2500}</span>
+                        <span className="text-xs text-[#f5d06f] font-bold">Total: ₹{(quantity * coinPrice).toLocaleString()}</span>
                       </div>
                     </div>
 
@@ -260,10 +285,10 @@ export default function PurchaseModal() {
                     <h4 className="text-white text-xs font-bold uppercase tracking-wider">Digital Lucky Token Entry</h4>
                     <p className="text-xs text-zinc-300">
                       A budget-friendly choice. You get a unique digital lucky number immediately generated in your profile.
-                      Cost: <span className="text-[#f5d06f] font-bold">₹250</span>.
+                      Cost: <span className="text-[#f5d06f] font-bold">₹{tokenPrice.toLocaleString()}</span>.
                     </p>
                     <div className="text-xs text-[#f5d06f] font-bold pt-2 border-t border-zinc-800">
-                      Total Amount Due: ₹250
+                      Total Amount Due: ₹{tokenPrice.toLocaleString()}
                     </div>
                   </div>
                 )}
@@ -311,18 +336,9 @@ export default function PurchaseModal() {
                     >
                       {/* Gateway Logo / Icon Area */}
                       <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gw.color} flex items-center justify-center text-2xl shadow-lg flex-shrink-0`}>
-                        {gw.id === 'esewa' && (
-                          <span className="font-black text-white text-xs tracking-tight">e</span>
-                        )}
-                        {gw.id === 'khalti' && (
-                          <span className="font-black text-white text-xs tracking-tight">K</span>
-                        )}
-                        {gw.id === 'phonepay' && (
-                          <span className="font-black text-white text-xs tracking-tight">Ph</span>
-                        )}
-                        {gw.id === 'fonepay' && (
-                          <span className="font-black text-white text-xs tracking-tight">F</span>
-                        )}
+                        <span className="font-black text-white text-xs tracking-tight">
+                          {gw.id === 'esewa' ? 'e' : gw.id === 'khalti' ? 'K' : gw.id === 'phonepay' ? 'Ph' : 'F'}
+                        </span>
                       </div>
 
                       <div className="flex-1 min-w-0">
@@ -391,16 +407,16 @@ export default function PurchaseModal() {
                   </div>
                 </div>
 
-                {/* eSewa Merchant QR */}
+                {/* QR Code Display */}
                 <div className="flex flex-col items-center p-5 bg-white rounded-2xl border-4 border-green-500/20 shadow-inner">
                   <img
-                    src={getEsewaQrUrl()}
-                    alt="eSewa Merchant QR Code"
+                    src={getDisplayQrUrl()}
+                    alt="Payment QR Code"
                     className="w-44 h-44 object-contain rounded-lg"
                   />
                   <div className="mt-3 text-center">
                     <span className="text-[10px] text-zinc-600 font-bold tracking-wider uppercase">
-                      Scan with eSewa App → Merchant Payment
+                      {paymentQrUrl ? 'Scan to Pay — Official Mero Luck QR' : 'Scan with eSewa App → Merchant Payment'}
                     </span>
                     <p className="text-[9px] text-zinc-400 mt-0.5">Pay exactly: <span className="font-bold text-zinc-700">₹{amount}</span></p>
                   </div>
